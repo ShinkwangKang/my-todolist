@@ -33,13 +33,17 @@
 - 칸반 보드와 동일한 레이아웃으로 **요일별 컬럼** 표시
 - 컬럼: **월 / 화 / 수 / 목 / 금 / 주말**
 - 주간 네비게이션 (이전 주 / 이번 주 / 다음 주)
-- 카드의 마감일(due_date) 기준으로 해당 요일 컬럼에 배치
+- 카드의 시작일(start_date) 기준으로 해당 요일 컬럼에 배치
 - **캐리오버**: 미완료(Done/Cancel 아닌) 카드는 시작 요일부터 **오늘까지** 이어서 표시
-  - 예: 월요일 마감 카드가 미완료이고 오늘이 수요일이면 → 월, 화, 수 컬럼에 모두 표시
+  - 예: 월요일 시작 카드가 미완료이고 오늘이 수요일이면 → 월, 화, 수 컬럼에 모두 표시
   - 미래 요일에는 표시하지 않음 (해당 요일이 되면 자동으로 나타남)
-  - 완료/취소된 카드는 원래 마감 요일에만 표시
-- 카드 드래그앤드롭으로 요일 간 이동 (마감일 자동 변경)
-- 각 요일 컬럼 하단에 '+' 추가 카드 배치 (클릭 시 해당 요일이 마감일로 사전 설정된 추가 폼 열기)
+  - 완료/취소된 카드는 시작일부터 완료/취소일까지 표시
+- **일별 진행 기록**: 캐리오버된 카드의 각 요일에 해당일의 작업 내용을 기록
+  - 각 요일 컬럼의 카드에 해당일의 진행 메모를 표시 (짧은 요약)
+  - 카드 클릭 시 전체 일별 기록 확인/편집 가능
+  - 예: 월(설계 완료) → 화(구현 진행) → 수(테스트 및 마무리)
+- 카드 드래그앤드롭으로 요일 간 이동 (시작일 자동 변경)
+- 각 요일 컬럼 하단에 '+' 추가 카드 배치 (클릭 시 해당 요일이 시작일로 사전 설정된 추가 폼 열기)
 
 
 ### 2. 할 일(카드) CRUD
@@ -64,10 +68,12 @@
 - 우선순위별 시각적 표시 (색상/아이콘)
 - 우선순위 기반 정렬/필터링
 
-### 5. 마감일
-- 날짜/시간 설정
-- 마감 임박/초과 시각적 경고
-- 마감일 기반 정렬/필터링
+### 5. 시작일 / 마감일
+- **시작일(start_date)**: 작업 시작 예정 날짜
+  - 주간 보드에서 카드 배치 기준
+- **마감일(due_date)**: 작업 완료 기한
+  - 마감 임박/초과 시각적 경고
+- 시작일/마감일 기반 정렬/필터링
 
 ## 비기능 요구사항
 
@@ -129,6 +135,11 @@ My-TodoList/
 - `DELETE /api/todos/{id}` - 할 일 삭제
 - `PUT /api/todos/{id}/move` - 컬럼 이동 / 순서 변경
 
+### 일별 진행 기록
+- `GET /api/todos/{id}/daily-progress` - 해당 할일의 전체 일별 기록
+- `PUT /api/todos/{id}/daily-progress/{date}` - 특정 날짜 기록 생성/수정 (upsert)
+- `DELETE /api/todos/{id}/daily-progress/{date}` - 특정 날짜 기록 삭제
+
 ### 업무 유형
 - `GET /api/task-types` - 전체 업무 유형 목록
 - `POST /api/task-types` - 업무 유형 생성
@@ -147,7 +158,7 @@ My-TodoList/
 - id, title, position, created_at, updated_at
 
 ### Todo (할 일)
-- id, title, description, category (work/personal), task_type_id (FK -> TaskType), priority (high/medium/low), due_date, is_completed, completed_at, column_id, position, created_at, updated_at
+- id, title, description, category (work/personal), task_type_id (FK -> TaskType), priority (high/medium/low), start_date, due_date, is_completed, completed_at, column_id, position, created_at, updated_at
 
 ### Tag (태그)
 - id, name, color
@@ -155,6 +166,10 @@ My-TodoList/
 ### TaskType (업무 유형)
 - id, name, color, icon, position, created_at, updated_at
 - 기본값: 개발, 문서, JIRA, 회의, 기타
+
+### DailyProgress (일별 진행 기록)
+- id, todo_id (FK -> Todo), date, content, created_at, updated_at
+- 하나의 Todo에 날짜별 하나의 기록만 존재 (todo_id + date UNIQUE)
 
 ### TodoTag (다대다 관계)
 - todo_id, tag_id
