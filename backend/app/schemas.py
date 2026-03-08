@@ -2,6 +2,7 @@ from pydantic import BaseModel
 from datetime import datetime
 from typing import Optional
 from .models import Priority, Category
+from typing import Dict, List
 
 
 # --- Column ---
@@ -140,3 +141,20 @@ class WeeklyResponse(BaseModel):
     weekend: list[TodoResponse]
     week_start: datetime
     week_end: datetime
+
+
+# --- Weekly Report ---
+class WeeklyReportSummary(BaseModel):
+    total_count: int
+    completed_count: int
+    completion_rate: float
+    new_count: int
+    avg_duration_days: Optional[float]
+
+
+class WeeklyReportResponse(BaseModel):
+    week_start: datetime
+    week_end: datetime
+    sections: Dict[str, List[TodoResponse]]
+    stats: Dict[str, Dict[str, int]]
+    summary: WeeklyReportSummary

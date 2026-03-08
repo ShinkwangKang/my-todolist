@@ -5,13 +5,14 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { KanbanBoard } from "@/components/Board/KanbanBoard";
 import { WeeklyBoard } from "@/components/Weekly/WeeklyBoard";
+import { WeeklyReport } from "@/components/Report/WeeklyReport";
 import { TodoFormDialog } from "@/components/Card/TodoFormDialog";
-import { LayoutGrid, CalendarDays, Plus, Loader2 } from "lucide-react";
+import { LayoutGrid, CalendarDays, FileText, Plus, Loader2 } from "lucide-react";
 import { api } from "@/lib/api";
 import type { Column, Todo, Tag, TaskType, Category, Priority } from "@/types";
 
 export default function Home() {
-  const [view, setView] = useState<"kanban" | "weekly">("kanban");
+  const [view, setView] = useState<"kanban" | "weekly" | "report">("kanban");
   const [columns, setColumns] = useState<Column[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
   const [taskTypes, setTaskTypes] = useState<TaskType[]>([]);
@@ -106,7 +107,7 @@ export default function Home() {
           <h1 className="text-xl font-bold text-gray-800">My TodoList</h1>
 
           <div className="flex items-center gap-4">
-            <Tabs value={view} onValueChange={(v) => setView(v as "kanban" | "weekly")}>
+            <Tabs value={view} onValueChange={(v) => setView(v as "kanban" | "weekly" | "report")}>
               <TabsList>
                 <TabsTrigger value="kanban" className="flex items-center gap-1.5">
                   <LayoutGrid className="h-4 w-4" />
@@ -115,6 +116,10 @@ export default function Home() {
                 <TabsTrigger value="weekly" className="flex items-center gap-1.5">
                   <CalendarDays className="h-4 w-4" />
                   주간 보드
+                </TabsTrigger>
+                <TabsTrigger value="report" className="flex items-center gap-1.5">
+                  <FileText className="h-4 w-4" />
+                  주간 리포트
                 </TabsTrigger>
               </TabsList>
             </Tabs>
@@ -145,7 +150,7 @@ export default function Home() {
             onEditTodo={handleEditTodo}
             onDeleteTodo={handleDeleteTodo}
           />
-        ) : (
+        ) : view === "weekly" ? (
           <WeeklyBoard
             onEditTodo={handleEditTodo}
             onAddTodo={(defaultStartDate?: string) => {
@@ -157,6 +162,8 @@ export default function Home() {
             onRefresh={fetchData}
             columns={columns}
           />
+        ) : (
+          <WeeklyReport />
         )}
       </main>
 

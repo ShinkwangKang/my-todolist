@@ -65,3 +65,29 @@ export interface WeeklyData {
   week_start: string;
   week_end: string;
 }
+
+export interface WeeklyReportSummary {
+  total_count: number;
+  completed_count: number;
+  completion_rate: number;
+  new_count: number;
+  avg_duration_days: number | null;
+}
+
+export interface WeeklyReportData {
+  week_start: string;
+  week_end: string;
+  sections: {
+    new_tasks: Todo[];
+    carryover_tasks: Todo[];
+    completed_tasks: Todo[];
+    in_progress_tasks: Todo[];
+    cancelled_tasks: Todo[];
+  };
+  stats: {
+    category_stats: Record<string, number>;
+    task_type_stats: Record<string, number>;
+    priority_stats: Record<string, number>;
+  };
+  summary: WeeklyReportSummary;
+}

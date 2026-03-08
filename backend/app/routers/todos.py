@@ -43,6 +43,18 @@ def get_weekly(
     return crud.get_weekly_todos(db, date)
 
 
+@router.get("/weekly-report", response_model=schemas.WeeklyReportResponse)
+def get_weekly_report(
+    date: date = Query(default=None, description="Date within the week (YYYY-MM-DD)"),
+    db: Session = Depends(get_db),
+):
+    if date is None:
+        date = datetime.utcnow()
+    else:
+        date = datetime.combine(date, datetime.min.time())
+    return crud.get_weekly_report(db, date)
+
+
 @router.post("", response_model=schemas.TodoResponse, status_code=201)
 def create_todo(todo: schemas.TodoCreate, db: Session = Depends(get_db)):
     return crud.create_todo(db, todo)

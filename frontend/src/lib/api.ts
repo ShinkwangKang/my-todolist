@@ -42,6 +42,10 @@ export const api = {
     const query = date ? `?date=${date}` : "";
     return request<import("@/types").WeeklyData>(`/api/todos/weekly${query}`);
   },
+  getWeeklyReport: (date?: string) => {
+    const query = date ? `?date=${date}` : "";
+    return request<import("@/types").WeeklyReportData>(`/api/todos/weekly-report${query}`);
+  },
   createTodo: (data: {
     title: string;
     description?: string;

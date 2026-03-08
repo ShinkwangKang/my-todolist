@@ -358,6 +358,141 @@ def get_weekly_todos(db: Session, date: datetime):
     }
 
 
+# ===== Weekly Report =====
+
+def get_weekly_report(db: Session, date: datetime):
+    weekday = date.weekday()
+    week_start = date.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=weekday)
+    week_end = week_start + timedelta(days=6, hours=23, minutes=59, seconds=59)
+
+    base_query = db.query(models.Todo).options(
+        joinedload(models.Todo.tags),
+        joinedload(models.Todo.task_type),
+        joinedload(models.Todo.daily_progress),
+    )
+
+    done_column = db.query(models.BoardColumn).filter(models.BoardColumn.title == "Done").first()
+    cancel_column = db.query(models.BoardColumn).filter(models.BoardColumn.title == "Cancel").first()
+    done_col_id = done_column.id if done_column else None
+    cancel_col_id = cancel_column.id if cancel_column else None
+
+    # 신규: 이번 주에 created_at된 카드
+    new_tasks = base_query.filter(
+        models.Todo.created_at >= week_start,
+        models.Todo.created_at <= week_end,
+    ).all()
+
+    # 완료: 이번 주에 completed_at된 카드 (Done 컬럼)
+    completed_tasks = base_query.filter(
+        models.Todo.completed_at >= week_start,
+        models.Todo.completed_at <= week_end,
+        models.Todo.is_completed == True,
+    ).all()
+
+    # 취소: Cancel 컬럼에 있고 이번 주에 updated_at된 카드
+    cancelled_tasks = []
+    if cancel_col_id:
+        cancelled_tasks = base_query.filter(
+            models.Todo.column_id == cancel_col_id,
+            models.Todo.updated_at >= week_start,
+            models.Todo.updated_at <= week_end,
+        ).all()
+
+    # 진행 중: Done/Cancel이 아니고 start_date가 week_end 이전인 카드
+    in_progress_exclude_ids = set()
+    if done_col_id:
+        in_progress_exclude_ids.add(done_col_id)
+    if cancel_col_id:
+        in_progress_exclude_ids.add(cancel_col_id)
+
+    in_progress_query = base_query.filter(
+        models.Todo.is_completed == False,
+    )
+    if in_progress_exclude_ids:
+        in_progress_query = in_progress_query.filter(
+            ~models.Todo.column_id.in_(list(in_progress_exclude_ids))
+        )
+    in_progress_tasks = in_progress_query.all()
+
+    # 이월: start_date가 week_start 이전이고 이번 주에도 미완료인 카드
+    carryover_query = base_query.filter(
+        models.Todo.start_date < week_start,
+        models.Todo.is_completed == False,
+    )
+    if in_progress_exclude_ids:
+        carryover_query = carryover_query.filter(
+            ~models.Todo.column_id.in_(list(in_progress_exclude_ids))
+        )
+    carryover_tasks = carryover_query.all()
+
+    # 이번 주 관련 전체 카드 (중복 제거)
+    all_ids = set()
+    all_related = []
+    for todo in new_tasks + completed_tasks + cancelled_tasks + in_progress_tasks + carryover_tasks:
+        if todo.id not in all_ids:
+            all_ids.add(todo.id)
+            all_related.append(todo)
+
+    # 통계 계산
+    category_stats: dict = {}
+    task_type_stats: dict = {}
+    priority_stats: dict = {}
+
+    for todo in all_related:
+        # 카테고리
+        cat = todo.category.value if hasattr(todo.category, 'value') else str(todo.category)
+        category_stats[cat] = category_stats.get(cat, 0) + 1
+        # 업무 유형
+        tt_name = todo.task_type.name if todo.task_type else "기타"
+        task_type_stats[tt_name] = task_type_stats.get(tt_name, 0) + 1
+        # 우선순위
+        pri = todo.priority.value if hasattr(todo.priority, 'value') else str(todo.priority)
+        priority_stats[pri] = priority_stats.get(pri, 0) + 1
+
+    # 요약 지표
+    total_count = len(all_related)
+    completed_count = len(completed_tasks)
+    completion_rate = round(completed_count / total_count * 100, 1) if total_count > 0 else 0.0
+    new_count = len(new_tasks)
+
+    # 평균 소요 기간 (start_date -> completed_at)
+    durations = []
+    for todo in completed_tasks:
+        if todo.start_date and todo.completed_at:
+            start = todo.start_date
+            end = todo.completed_at
+            if hasattr(end, 'tzinfo') and end.tzinfo is not None:
+                end = end.replace(tzinfo=None)
+            if hasattr(start, 'tzinfo') and start.tzinfo is not None:
+                start = start.replace(tzinfo=None)
+            durations.append((end - start).days)
+    avg_duration_days = round(sum(durations) / len(durations), 1) if durations else None
+
+    return {
+        "week_start": week_start,
+        "week_end": week_end,
+        "sections": {
+            "new_tasks": new_tasks,
+            "carryover_tasks": carryover_tasks,
+            "completed_tasks": completed_tasks,
+            "in_progress_tasks": in_progress_tasks,
+            "cancelled_tasks": cancelled_tasks,
+        },
+        "stats": {
+            "category_stats": category_stats,
+            "task_type_stats": task_type_stats,
+            "priority_stats": priority_stats,
+        },
+        "summary": {
+            "total_count": total_count,
+            "completed_count": completed_count,
+            "completion_rate": completion_rate,
+            "new_count": new_count,
+            "avg_duration_days": avg_duration_days,
+        },
+    }
+
+
 # ===== DailyProgress =====
 
 def get_daily_progress(db: Session, todo_id: int):
