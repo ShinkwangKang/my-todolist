@@ -2,7 +2,6 @@
 
 import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import { TodoCard } from "@/components/Card/TodoCard";
 import type { Column, Todo } from "@/types";
@@ -35,21 +34,13 @@ export function BoardColumn({ column, onAddTodo, onEditTodo, onDeleteTodo }: Boa
         columnColors[column.title] || "border-t-gray-300"
       } ${isOver ? "ring-2 ring-blue-300 bg-blue-50/30" : ""}`}
     >
-      <div className="flex items-center justify-between p-3 pb-2">
+      <div className="flex items-center p-3 pb-2">
         <div className="flex items-center gap-2">
           <h2 className="font-semibold text-gray-700">{column.title}</h2>
           <span className="text-xs text-gray-400 bg-gray-200 px-1.5 py-0.5 rounded-full">
             {column.todos.length}
           </span>
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7"
-          onClick={() => onAddTodo(column.id)}
-        >
-          <Plus className="h-4 w-4" />
-        </Button>
       </div>
 
       <div
@@ -69,6 +60,13 @@ export function BoardColumn({ column, onAddTodo, onEditTodo, onDeleteTodo }: Boa
             />
           ))}
         </SortableContext>
+
+        <button
+          onClick={() => onAddTodo(column.id)}
+          className="w-full flex items-center justify-center p-3 rounded-lg border-2 border-dashed border-gray-300 text-gray-400 hover:border-gray-400 hover:text-gray-500 hover:bg-gray-100 transition-colors"
+        >
+          <Plus className="h-5 w-5" />
+        </button>
       </div>
     </div>
   );
