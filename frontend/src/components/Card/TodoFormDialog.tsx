@@ -32,6 +32,7 @@ interface TodoFormDialogProps {
     priority: Priority;
     start_date?: string;
     due_date?: string;
+    completed_at?: string;
     column_id: number;
     tag_ids: number[];
   }) => void;
@@ -61,6 +62,7 @@ export function TodoFormDialog({
   const [priority, setPriority] = useState<Priority>("medium");
   const [startDate, setStartDate] = useState("");
   const [dueDate, setDueDate] = useState("");
+  const [completedAt, setCompletedAt] = useState("");
   const [columnId, setColumnId] = useState<string>("");
   const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
 
@@ -73,6 +75,7 @@ export function TodoFormDialog({
       setPriority(todo.priority);
       setStartDate(todo.start_date ? todo.start_date.slice(0, 16) : "");
       setDueDate(todo.due_date ? todo.due_date.slice(0, 16) : "");
+      setCompletedAt(todo.completed_at ? todo.completed_at.slice(0, 16) : "");
       setColumnId(todo.column_id.toString());
       setSelectedTagIds(todo.tags.map((t) => t.id));
     } else {
@@ -87,6 +90,7 @@ export function TodoFormDialog({
           : ""
       );
       setDueDate("");
+      setCompletedAt("");
       setColumnId(defaultColumnId?.toString() || columns[0]?.id.toString() || "");
       setSelectedTagIds([]);
     }
@@ -109,6 +113,7 @@ export function TodoFormDialog({
       priority,
       start_date: startDate || undefined,
       due_date: dueDate || undefined,
+      completed_at: completedAt || undefined,
       column_id: Number(columnId),
       tag_ids: selectedTagIds,
     });
@@ -205,7 +210,7 @@ export function TodoFormDialog({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             <div>
               <Label htmlFor="start_date">시작일</Label>
               <Input
@@ -222,6 +227,15 @@ export function TodoFormDialog({
                 type="datetime-local"
                 value={dueDate}
                 onChange={(e) => setDueDate(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="completed_at">완료일</Label>
+              <Input
+                id="completed_at"
+                type="datetime-local"
+                value={completedAt}
+                onChange={(e) => setCompletedAt(e.target.value)}
               />
             </div>
           </div>

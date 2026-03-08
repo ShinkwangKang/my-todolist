@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .database import engine, SessionLocal
 from . import models
-from .routers import columns, todos, tags, task_types
+from .routers import columns, todos, tags, task_types, projects
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -17,6 +17,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(projects.router)
 app.include_router(columns.router)
 app.include_router(todos.router)
 app.include_router(tags.router)

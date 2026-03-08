@@ -3,20 +3,19 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { GripVertical, MoreHorizontal, Pencil, Trash2, Clock, AlertTriangle, CalendarCheck } from "lucide-react";
+import { GripVertical, MoreHorizontal, Pencil, Trash2, Clock, AlertTriangle, CalendarCheck, CheckCircle2, Archive } from "lucide-react";
 import type { Todo } from "@/types";
 
 const priorityConfig = {
-  high: { label: "높음", color: "bg-red-100 text-red-700 border-red-200" },
-  medium: { label: "보통", color: "bg-yellow-100 text-yellow-700 border-yellow-200" },
-  low: { label: "낮음", color: "bg-green-100 text-green-700 border-green-200" },
+  high: { label: "높음", color: "bg-red-100 text-red-700 border-red-200", barColor: "border-l-red-500" },
+  medium: { label: "보통", color: "bg-yellow-100 text-yellow-700 border-yellow-200", barColor: "border-l-yellow-500" },
+  low: { label: "낮음", color: "bg-green-100 text-green-700 border-green-200", barColor: "border-l-green-500" },
 };
 
 const categoryConfig = {
@@ -24,13 +23,35 @@ const categoryConfig = {
   personal: { label: "개인", color: "bg-purple-100 text-purple-700" },
 };
 
+function getOverdueText(dueDate: string): string {
+  const now = new Date();
+  const due = new Date(dueDate);
+  const diffMs = now.getTime() - due.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  if (diffDays > 0) return `${diffDays}일 지연`;
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  if (diffHours > 0) return `${diffHours}시간 지연`;
+  return "지연";
+}
+
+function getDueSoonText(dueDate: string): string {
+  const now = new Date();
+  const due = new Date(dueDate);
+  const diffMs = due.getTime() - now.getTime();
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  if (diffHours <= 0) return "곧 마감";
+  if (diffHours < 1) return "1시간 미만";
+  return `${diffHours}시간 남음`;
+}
+
 interface TodoCardProps {
   todo: Todo;
   onEdit: (todo: Todo) => void;
   onDelete: (id: number) => void;
+  onArchive?: (id: number) => void;
 }
 
-export function TodoCard({ todo, onEdit, onDelete }: TodoCardProps) {
+export function TodoCard({ todo, onEdit, onDelete, onArchive }: TodoCardProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: `todo-${todo.id}`, data: { type: "todo", todo } });
 
@@ -47,13 +68,20 @@ export function TodoCard({ todo, onEdit, onDelete }: TodoCardProps) {
     !isOverdue &&
     new Date(todo.due_date).getTime() - Date.now() < 24 * 60 * 60 * 1000;
 
+  // Left bar color: overdue > due soon > priority
+  const leftBarColor = isOverdue
+    ? "border-l-red-500"
+    : isDueSoon
+    ? "border-l-yellow-500"
+    : priorityConfig[todo.priority].barColor;
+
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className={`group rounded-lg border bg-white p-3 shadow-sm transition-shadow hover:shadow-md ${
+      className={`group rounded-lg border border-l-[3px] bg-card p-3 shadow-sm transition-shadow hover:shadow-md ${leftBarColor} ${
         isDragging ? "opacity-50 shadow-lg" : ""
-      } ${isOverdue ? "border-red-300" : isDueSoon ? "border-yellow-300" : "border-gray-200"}`}
+      } ${isOverdue ? "border-red-300" : isDueSoon ? "border-yellow-300" : "border-border"}`}
     >
       <div className="flex items-start gap-2">
         <button
@@ -61,7 +89,7 @@ export function TodoCard({ todo, onEdit, onDelete }: TodoCardProps) {
           {...listeners}
           className="mt-0.5 cursor-grab opacity-0 group-hover:opacity-100 transition-opacity"
         >
-          <GripVertical className="h-4 w-4 text-gray-400" />
+          <GripVertical className="h-4 w-4 text-muted-foreground" />
         </button>
 
         <div className="flex-1 min-w-0">
@@ -79,12 +107,12 @@ export function TodoCard({ todo, onEdit, onDelete }: TodoCardProps) {
             )}
           </div>
 
-          <h3 className={`text-sm font-medium ${todo.is_completed ? "line-through text-gray-400" : "text-gray-900"}`}>
+          <h3 className={`text-sm font-medium ${todo.is_completed ? "line-through text-muted-foreground" : "text-foreground"}`}>
             {todo.title}
           </h3>
 
           {todo.description && (
-            <p className="text-xs text-gray-500 mt-1 line-clamp-2">{todo.description}</p>
+            <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{todo.description}</p>
           )}
 
           <div className="flex flex-wrap items-center gap-1.5 mt-2">
@@ -119,7 +147,7 @@ export function TodoCard({ todo, onEdit, onDelete }: TodoCardProps) {
 
           {todo.due_date && (
             <div className={`flex items-center gap-1 mt-1 text-xs ${
-              isOverdue ? "text-red-600" : isDueSoon ? "text-yellow-600" : "text-gray-500"
+              isOverdue ? "text-red-600 font-medium" : isDueSoon ? "text-yellow-600 font-medium" : "text-muted-foreground"
             }`}>
               {isOverdue ? <AlertTriangle className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
               <span>
@@ -127,8 +155,25 @@ export function TodoCard({ todo, onEdit, onDelete }: TodoCardProps) {
                 {new Date(todo.due_date).toLocaleDateString("ko-KR", {
                   month: "short",
                   day: "numeric",
-                  hour: "2-digit",
-                  minute: "2-digit",
+                })}
+              </span>
+              {isOverdue && (
+                <span className="text-red-600 font-semibold">({getOverdueText(todo.due_date)})</span>
+              )}
+              {isDueSoon && (
+                <span className="text-yellow-600 font-semibold">({getDueSoonText(todo.due_date)})</span>
+              )}
+            </div>
+          )}
+
+          {todo.completed_at && (
+            <div className="flex items-center gap-1 mt-1 text-xs text-green-600">
+              <CheckCircle2 className="h-3 w-3" />
+              <span>
+                완료:{" "}
+                {new Date(todo.completed_at).toLocaleDateString("ko-KR", {
+                  month: "short",
+                  day: "numeric",
                 })}
               </span>
             </div>
@@ -136,13 +181,18 @@ export function TodoCard({ todo, onEdit, onDelete }: TodoCardProps) {
         </div>
 
         <DropdownMenu>
-          <DropdownMenuTrigger className="h-6 w-6 flex items-center justify-center rounded opacity-0 group-hover:opacity-100 transition-opacity hover:bg-gray-100">
+          <DropdownMenuTrigger className="h-6 w-6 flex items-center justify-center rounded opacity-0 group-hover:opacity-100 transition-opacity hover:bg-accent">
             <MoreHorizontal className="h-4 w-4" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem onClick={() => onEdit(todo)}>
               <Pencil className="h-4 w-4 mr-2" /> 수정
             </DropdownMenuItem>
+            {onArchive && (
+              <DropdownMenuItem onClick={() => onArchive(todo.id)}>
+                <Archive className="h-4 w-4 mr-2" /> 아카이브
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem onClick={() => onDelete(todo.id)} className="text-red-600">
               <Trash2 className="h-4 w-4 mr-2" /> 삭제
             </DropdownMenuItem>

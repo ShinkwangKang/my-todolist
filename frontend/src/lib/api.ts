@@ -12,9 +12,27 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return res.json();
 }
 
-// Columns
+// Projects
 export const api = {
-  getColumns: () => request<import("@/types").Column[]>("/api/columns"),
+  getProjects: () => request<import("@/types").Project[]>("/api/projects"),
+  createProject: (data: { name: string; description?: string; color?: string; icon?: string }) =>
+    request<import("@/types").Project>("/api/projects", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  updateProject: (id: number, data: { name?: string; description?: string; color?: string; icon?: string }) =>
+    request<import("@/types").Project>(`/api/projects/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+  deleteProject: (id: number) =>
+    request<void>(`/api/projects/${id}`, { method: "DELETE" }),
+
+  // Columns
+  getColumns: (projectId?: number) => {
+    const query = projectId ? `?project_id=${projectId}` : "";
+    return request<import("@/types").Column[]>(`/api/columns${query}`);
+  },
   createColumn: (title: string) =>
     request<import("@/types").Column>("/api/columns", {
       method: "POST",
@@ -38,12 +56,18 @@ export const api = {
     const query = params ? "?" + new URLSearchParams(params).toString() : "";
     return request<import("@/types").Todo[]>(`/api/todos${query}`);
   },
-  getWeeklyTodos: (date?: string) => {
-    const query = date ? `?date=${date}` : "";
+  getWeeklyTodos: (date?: string, projectId?: number) => {
+    const params = new URLSearchParams();
+    if (date) params.set("date", date);
+    if (projectId) params.set("project_id", String(projectId));
+    const query = params.toString() ? `?${params.toString()}` : "";
     return request<import("@/types").WeeklyData>(`/api/todos/weekly${query}`);
   },
-  getWeeklyReport: (date?: string) => {
-    const query = date ? `?date=${date}` : "";
+  getWeeklyReport: (date?: string, projectId?: number) => {
+    const params = new URLSearchParams();
+    if (date) params.set("date", date);
+    if (projectId) params.set("project_id", String(projectId));
+    const query = params.toString() ? `?${params.toString()}` : "";
     return request<import("@/types").WeeklyReportData>(`/api/todos/weekly-report${query}`);
   },
   createTodo: (data: {
@@ -51,6 +75,7 @@ export const api = {
     description?: string;
     category?: string;
     task_type_id?: number;
+    project_id?: number;
     priority?: string;
     start_date?: string;
     due_date?: string;
@@ -73,6 +98,16 @@ export const api = {
       method: "PUT",
       body: JSON.stringify({ column_id: columnId, position }),
     }),
+  getArchivedTodos: (projectId?: number) => {
+    const query = projectId ? `?project_id=${projectId}` : "";
+    return request<import("@/types").Todo[]>(`/api/todos/archived${query}`);
+  },
+  archiveTodo: (id: number) =>
+    request<import("@/types").Todo>(`/api/todos/${id}/archive`, { method: "PUT" }),
+  unarchiveTodo: (id: number) =>
+    request<import("@/types").Todo>(`/api/todos/${id}/unarchive`, { method: "PUT" }),
+  bulkArchive: (columnId: number) =>
+    request<{ archived_count: number }>(`/api/todos/bulk-archive?column_id=${columnId}`, { method: "PUT" }),
 
   // Tags
   getTags: () => request<import("@/types").Tag[]>("/api/tags"),

@@ -128,7 +128,7 @@ function WeekDayColumn({
 
   return (
     <div
-      className={`flex flex-col w-72 min-w-[288px] rounded-lg border bg-gray-50 ${
+      className={`flex flex-col w-72 min-w-[288px] rounded-lg border border-border bg-muted/50 ${
         isCurrentDay
           ? "border-t-4 border-t-blue-500 ring-1 ring-blue-200"
           : "border-t-4 border-t-gray-300"
@@ -138,12 +138,12 @@ function WeekDayColumn({
       <div className="flex items-center gap-2 p-3 pb-2">
         <h2
           className={`font-semibold ${
-            isCurrentDay ? "text-blue-600" : "text-gray-700"
+            isCurrentDay ? "text-blue-600" : "text-foreground"
           }`}
         >
           {formatDayHeader(dayKey, dayDate)}
         </h2>
-        <span className="text-xs text-gray-400 bg-gray-200 px-1.5 py-0.5 rounded-full">
+        <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full">
           {todos.length}
         </span>
         {isCurrentDay && (
@@ -187,7 +187,7 @@ function WeekDayColumn({
         {/* Add card button */}
         <button
           onClick={() => onAddTodo(dayKey)}
-          className="w-full flex items-center justify-center p-3 rounded-lg border-2 border-dashed border-gray-300 text-gray-400 hover:border-gray-400 hover:text-gray-500 hover:bg-gray-100 transition-colors"
+          className="w-full flex items-center justify-center p-3 rounded-lg border-2 border-dashed border-border text-muted-foreground hover:border-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
         >
           <Plus className="h-5 w-5" />
         </button>
@@ -201,9 +201,10 @@ interface WeeklyBoardProps {
   onAddTodo?: (defaultDueDate?: string) => void;
   onRefresh?: () => void;
   columns?: import("@/types").Column[];
+  projectId?: number;
 }
 
-export function WeeklyBoard({ onEditTodo, onAddTodo, onRefresh, columns }: WeeklyBoardProps) {
+export function WeeklyBoard({ onEditTodo, onAddTodo, onRefresh, columns, projectId }: WeeklyBoardProps) {
   const [weeklyData, setWeeklyData] = useState<WeeklyData | null>(null);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [loading, setLoading] = useState(true);
@@ -218,14 +219,14 @@ export function WeeklyBoard({ onEditTodo, onAddTodo, onRefresh, columns }: Weekl
     setLoading(true);
     try {
       const dateStr = currentDate.toISOString().split("T")[0];
-      const data = await api.getWeeklyTodos(dateStr);
+      const data = await api.getWeeklyTodos(dateStr, projectId);
       setWeeklyData(data);
     } catch (err) {
       console.error("Failed to fetch weekly data:", err);
     } finally {
       setLoading(false);
     }
-  }, [currentDate]);
+  }, [currentDate, projectId]);
 
   useEffect(() => {
     fetchWeekly();
@@ -336,7 +337,7 @@ export function WeeklyBoard({ onEditTodo, onAddTodo, onRefresh, columns }: Weekl
           <Button variant="outline" size="icon" onClick={() => navigateWeek(-1)}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <span className="text-lg font-semibold text-gray-700 min-w-[240px] text-center">
+          <span className="text-lg font-semibold text-foreground min-w-[240px] text-center">
             {formatWeekRange()}
           </span>
           <Button variant="outline" size="icon" onClick={() => navigateWeek(1)}>

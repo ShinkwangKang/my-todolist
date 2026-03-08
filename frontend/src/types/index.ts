@@ -1,6 +1,18 @@
 export type Priority = "high" | "medium" | "low";
 export type Category = "work" | "personal";
 
+export interface Project {
+  id: number;
+  name: string;
+  description: string | null;
+  color: string;
+  icon: string | null;
+  position: number;
+  is_archived: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Tag {
   id: number;
   name: string;
@@ -33,11 +45,15 @@ export interface Todo {
   category: Category;
   task_type_id: number | null;
   task_type: TaskType | null;
+  project_id: number | null;
+  project: Project | null;
   priority: Priority;
   start_date: string | null;
   due_date: string | null;
   is_completed: boolean;
   completed_at: string | null;
+  is_archived: boolean;
+  archived_at: string | null;
   column_id: number;
   position: number;
   tags: Tag[];

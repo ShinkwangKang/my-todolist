@@ -6,22 +6,81 @@ from typing import Optional
 from . import models, schemas
 
 
+# ===== Project =====
+
+def get_projects(db: Session):
+    return db.query(models.Project).filter(models.Project.is_archived == False).order_by(models.Project.position).all()
+
+
+def get_project(db: Session, project_id: int):
+    return db.query(models.Project).filter(models.Project.id == project_id).first()
+
+
+def create_project(db: Session, project: schemas.ProjectCreate):
+    max_pos = db.query(func.max(models.Project.position)).scalar() or -1
+    db_project = models.Project(
+        name=project.name,
+        description=project.description,
+        color=project.color,
+        icon=project.icon,
+        position=max_pos + 1,
+    )
+    db.add(db_project)
+    db.commit()
+    db.refresh(db_project)
+    return db_project
+
+
+def update_project(db: Session, project_id: int, project: schemas.ProjectUpdate):
+    db_project = db.query(models.Project).filter(models.Project.id == project_id).first()
+    if not db_project:
+        return None
+    update_data = project.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(db_project, key, value)
+    db.commit()
+    db.refresh(db_project)
+    return db_project
+
+
+def delete_project(db: Session, project_id: int):
+    db_project = db.query(models.Project).filter(models.Project.id == project_id).first()
+    if not db_project:
+        return False
+    db.delete(db_project)
+    db.commit()
+    return True
+
+
+def reorder_projects(db: Session, project_ids: list[int]):
+    for i, pid in enumerate(project_ids):
+        db.query(models.Project).filter(models.Project.id == pid).update({"position": i})
+    db.commit()
+
+
 # ===== Column =====
 
 def get_columns(db: Session):
     return db.query(models.BoardColumn).order_by(models.BoardColumn.position).all()
 
 
-def get_columns_with_todos(db: Session):
-    return (
+def get_columns_with_todos(db: Session, project_id: Optional[int] = None):
+    columns = (
         db.query(models.BoardColumn)
-        .options(
-            joinedload(models.BoardColumn.todos).joinedload(models.Todo.tags),
-            joinedload(models.BoardColumn.todos).joinedload(models.Todo.task_type),
-        )
         .order_by(models.BoardColumn.position)
         .all()
     )
+    for col in columns:
+        query = (
+            db.query(models.Todo)
+            .options(joinedload(models.Todo.tags), joinedload(models.Todo.task_type), joinedload(models.Todo.project))
+            .filter(models.Todo.column_id == col.id)
+            .filter(models.Todo.is_archived == False)
+        )
+        if project_id is not None:
+            query = query.filter(models.Todo.project_id == project_id)
+        col.todos = query.order_by(models.Todo.position).all()
+    return columns
 
 
 def create_column(db: Session, column: schemas.ColumnCreate):
@@ -140,11 +199,17 @@ def get_todos(
     task_type_id: Optional[int] = None,
     tag_id: Optional[int] = None,
     is_completed: Optional[bool] = None,
+    project_id: Optional[int] = None,
+    include_archived: bool = False,
 ):
     query = (
         db.query(models.Todo)
-        .options(joinedload(models.Todo.tags), joinedload(models.Todo.task_type))
+        .options(joinedload(models.Todo.tags), joinedload(models.Todo.task_type), joinedload(models.Todo.project))
     )
+    if not include_archived:
+        query = query.filter(models.Todo.is_archived == False)
+    if project_id is not None:
+        query = query.filter(models.Todo.project_id == project_id)
     if column_id is not None:
         query = query.filter(models.Todo.column_id == column_id)
     if priority is not None:
@@ -172,6 +237,7 @@ def create_todo(db: Session, todo: schemas.TodoCreate):
         description=todo.description,
         category=todo.category,
         task_type_id=todo.task_type_id,
+        project_id=todo.project_id,
         priority=todo.priority,
         start_date=todo.start_date,
         due_date=todo.due_date,
@@ -190,7 +256,7 @@ def create_todo(db: Session, todo: schemas.TodoCreate):
 def update_todo(db: Session, todo_id: int, todo: schemas.TodoUpdate):
     db_todo = (
         db.query(models.Todo)
-        .options(joinedload(models.Todo.tags), joinedload(models.Todo.task_type))
+        .options(joinedload(models.Todo.tags), joinedload(models.Todo.task_type), joinedload(models.Todo.project))
         .filter(models.Todo.id == todo_id)
         .first()
     )
@@ -200,10 +266,11 @@ def update_todo(db: Session, todo_id: int, todo: schemas.TodoUpdate):
     update_data = todo.model_dump(exclude_unset=True)
     tag_ids = update_data.pop("tag_ids", None)
 
+    explicit_completed_at = "completed_at" in update_data
     for key, value in update_data.items():
-        if key == "is_completed" and value is True and not db_todo.is_completed:
+        if key == "is_completed" and value is True and not db_todo.is_completed and not explicit_completed_at:
             db_todo.completed_at = datetime.now(timezone.utc)
-        elif key == "is_completed" and value is False:
+        elif key == "is_completed" and value is False and not explicit_completed_at:
             db_todo.completed_at = None
         setattr(db_todo, key, value)
 
@@ -262,9 +329,58 @@ def move_todo(db: Session, todo_id: int, move: schemas.TodoMove):
     return db_todo
 
 
+# ===== Archive =====
+
+def get_archived_todos(db: Session, project_id: Optional[int] = None):
+    query = (
+        db.query(models.Todo)
+        .options(joinedload(models.Todo.tags), joinedload(models.Todo.task_type), joinedload(models.Todo.project))
+        .filter(models.Todo.is_archived == True)
+    )
+    if project_id is not None:
+        query = query.filter(models.Todo.project_id == project_id)
+    return query.order_by(models.Todo.archived_at.desc()).all()
+
+
+def archive_todo(db: Session, todo_id: int):
+    db_todo = db.query(models.Todo).filter(models.Todo.id == todo_id).first()
+    if not db_todo:
+        return None
+    db_todo.is_archived = True
+    db_todo.archived_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(db_todo)
+    return db_todo
+
+
+def unarchive_todo(db: Session, todo_id: int):
+    db_todo = db.query(models.Todo).filter(models.Todo.id == todo_id).first()
+    if not db_todo:
+        return None
+    db_todo.is_archived = False
+    db_todo.archived_at = None
+    db.commit()
+    db.refresh(db_todo)
+    return db_todo
+
+
+def bulk_archive(db: Session, column_id: int):
+    todos = (
+        db.query(models.Todo)
+        .filter(models.Todo.column_id == column_id, models.Todo.is_archived == False)
+        .all()
+    )
+    now = datetime.now(timezone.utc)
+    for todo in todos:
+        todo.is_archived = True
+        todo.archived_at = now
+    db.commit()
+    return len(todos)
+
+
 # ===== Weekly =====
 
-def get_weekly_todos(db: Session, date: datetime):
+def get_weekly_todos(db: Session, date: datetime, project_id: Optional[int] = None):
     # Calculate week boundaries (Monday to Sunday)
     weekday = date.weekday()
     week_start = date.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=weekday)
@@ -284,7 +400,13 @@ def get_weekly_todos(db: Session, date: datetime):
         joinedload(models.Todo.tags),
         joinedload(models.Todo.task_type),
         joinedload(models.Todo.daily_progress),
+        joinedload(models.Todo.project),
     )
+    if project_id is not None:
+        base_query = base_query.filter(models.Todo.project_id == project_id)
+
+    # Exclude archived todos
+    base_query = base_query.filter(models.Todo.is_archived == False)
 
     # Fetch all todos that have a start_date within this week
     week_todos = base_query.filter(
@@ -315,12 +437,9 @@ def get_weekly_todos(db: Session, date: datetime):
         ).first() is not None)
 
         if is_done:
-            # Completed/cancelled: show from start_date to min(due_date, completed_at)
+            # Completed/cancelled: show from start_date to completed_at
             completed_at = todo.completed_at or todo.updated_at or start
             end_date = completed_at
-            if todo.due_date:
-                due_naive = todo.due_date.replace(hour=23, minute=59, second=59, microsecond=0)
-                end_date = min(end_date, due_naive)
             end_day_idx = None
             for i in range(7):
                 if day_starts[i] <= end_date <= day_ends[i]:
@@ -360,7 +479,7 @@ def get_weekly_todos(db: Session, date: datetime):
 
 # ===== Weekly Report =====
 
-def get_weekly_report(db: Session, date: datetime):
+def get_weekly_report(db: Session, date: datetime, project_id: Optional[int] = None):
     weekday = date.weekday()
     week_start = date.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=weekday)
     week_end = week_start + timedelta(days=6, hours=23, minutes=59, seconds=59)
@@ -369,7 +488,13 @@ def get_weekly_report(db: Session, date: datetime):
         joinedload(models.Todo.tags),
         joinedload(models.Todo.task_type),
         joinedload(models.Todo.daily_progress),
+        joinedload(models.Todo.project),
     )
+    if project_id is not None:
+        base_query = base_query.filter(models.Todo.project_id == project_id)
+
+    # Exclude archived todos from report
+    base_query = base_query.filter(models.Todo.is_archived == False)
 
     done_column = db.query(models.BoardColumn).filter(models.BoardColumn.title == "Done").first()
     cancel_column = db.query(models.BoardColumn).filter(models.BoardColumn.title == "Cancel").first()

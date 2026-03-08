@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from typing import Optional
 
 from .. import crud, schemas
 from ..database import get_db
@@ -8,8 +9,8 @@ router = APIRouter(prefix="/api/columns", tags=["columns"])
 
 
 @router.get("", response_model=list[schemas.ColumnWithTodos])
-def list_columns(db: Session = Depends(get_db)):
-    return crud.get_columns_with_todos(db)
+def list_columns(project_id: Optional[int] = None, db: Session = Depends(get_db)):
+    return crud.get_columns_with_todos(db, project_id=project_id)
 
 
 @router.post("", response_model=schemas.ColumnResponse, status_code=201)

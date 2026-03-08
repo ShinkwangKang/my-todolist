@@ -5,6 +5,32 @@ from .models import Priority, Category
 from typing import Dict, List
 
 
+# --- Project ---
+class ProjectBase(BaseModel):
+    name: str
+    description: Optional[str] = None
+    color: str = "#3B82F6"
+    icon: Optional[str] = None
+
+class ProjectCreate(ProjectBase):
+    pass
+
+class ProjectUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    color: Optional[str] = None
+    icon: Optional[str] = None
+
+class ProjectResponse(ProjectBase):
+    id: int
+    position: int
+    is_archived: bool
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 # --- Column ---
 class ColumnBase(BaseModel):
     title: str
@@ -88,6 +114,7 @@ class TodoBase(BaseModel):
     description: Optional[str] = None
     category: Category = Category.WORK
     task_type_id: Optional[int] = None
+    project_id: Optional[int] = None
     priority: Priority = Priority.MEDIUM
     start_date: Optional[datetime] = None
     due_date: Optional[datetime] = None
@@ -101,10 +128,13 @@ class TodoUpdate(BaseModel):
     description: Optional[str] = None
     category: Optional[Category] = None
     task_type_id: Optional[int] = None
+    project_id: Optional[int] = None
     priority: Optional[Priority] = None
     start_date: Optional[datetime] = None
     due_date: Optional[datetime] = None
     is_completed: Optional[bool] = None
+    completed_at: Optional[datetime] = None
+    is_archived: Optional[bool] = None
     tag_ids: Optional[list[int]] = None
 
 class TodoMove(BaseModel):
@@ -115,10 +145,13 @@ class TodoResponse(TodoBase):
     id: int
     is_completed: bool
     completed_at: Optional[datetime]
+    is_archived: bool
+    archived_at: Optional[datetime]
     column_id: int
     position: int
     tags: list[TagResponse] = []
     task_type: Optional[TaskTypeResponse] = None
+    project: Optional[ProjectResponse] = None
     daily_progress: list[DailyProgressResponse] = []
     created_at: datetime
     updated_at: datetime

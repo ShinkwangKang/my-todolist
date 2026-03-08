@@ -18,6 +18,7 @@ def list_todos(
     task_type_id: Optional[int] = None,
     tag_id: Optional[int] = None,
     is_completed: Optional[bool] = None,
+    project_id: Optional[int] = None,
     db: Session = Depends(get_db),
 ):
     return crud.get_todos(
@@ -28,31 +29,67 @@ def list_todos(
         task_type_id=task_type_id,
         tag_id=tag_id,
         is_completed=is_completed,
+        project_id=project_id,
     )
 
 
 @router.get("/weekly", response_model=schemas.WeeklyResponse)
 def get_weekly(
     date: date = Query(default=None, description="Date within the week (YYYY-MM-DD)"),
+    project_id: Optional[int] = None,
     db: Session = Depends(get_db),
 ):
     if date is None:
         date = datetime.utcnow()
     else:
         date = datetime.combine(date, datetime.min.time())
-    return crud.get_weekly_todos(db, date)
+    return crud.get_weekly_todos(db, date, project_id=project_id)
 
 
 @router.get("/weekly-report", response_model=schemas.WeeklyReportResponse)
 def get_weekly_report(
     date: date = Query(default=None, description="Date within the week (YYYY-MM-DD)"),
+    project_id: Optional[int] = None,
     db: Session = Depends(get_db),
 ):
     if date is None:
         date = datetime.utcnow()
     else:
         date = datetime.combine(date, datetime.min.time())
-    return crud.get_weekly_report(db, date)
+    return crud.get_weekly_report(db, date, project_id=project_id)
+
+
+@router.get("/archived", response_model=list[schemas.TodoResponse])
+def list_archived_todos(
+    project_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+):
+    return crud.get_archived_todos(db, project_id=project_id)
+
+
+@router.put("/bulk-archive")
+def bulk_archive_todos(
+    column_id: int = Query(..., description="Column ID to archive all todos from"),
+    db: Session = Depends(get_db),
+):
+    count = crud.bulk_archive(db, column_id)
+    return {"archived_count": count}
+
+
+@router.put("/{todo_id}/archive", response_model=schemas.TodoResponse)
+def archive_todo(todo_id: int, db: Session = Depends(get_db)):
+    result = crud.archive_todo(db, todo_id)
+    if not result:
+        raise HTTPException(status_code=404, detail="Todo not found")
+    return result
+
+
+@router.put("/{todo_id}/unarchive", response_model=schemas.TodoResponse)
+def unarchive_todo(todo_id: int, db: Session = Depends(get_db)):
+    result = crud.unarchive_todo(db, todo_id)
+    if not result:
+        raise HTTPException(status_code=404, detail="Todo not found")
+    return result
 
 
 @router.post("", response_model=schemas.TodoResponse, status_code=201)

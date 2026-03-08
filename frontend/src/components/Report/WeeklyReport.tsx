@@ -50,9 +50,9 @@ const CATEGORY_LABEL: Record<string, string> = {
 
 function TodoCard({ todo, showCompleted }: { todo: Todo; showCompleted?: boolean }) {
   return (
-    <div className="flex items-start gap-2 py-2 px-3 rounded-lg bg-white border border-gray-100 hover:border-gray-200 transition-colors">
+    <div className="flex items-start gap-2 py-2 px-3 rounded-lg bg-card border border-border hover:border-muted-foreground/30 transition-colors">
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-gray-800 truncate">{todo.title}</p>
+        <p className="text-sm font-medium text-foreground truncate">{todo.title}</p>
         <div className="flex items-center gap-2 mt-1 flex-wrap">
           <span className="text-xs text-gray-400">
             {CATEGORY_LABEL[todo.category] ?? todo.category}
@@ -99,7 +99,7 @@ function Section({
     <div className="mb-6">
       <div className={`flex items-center gap-2 mb-2`}>
         <span className={`w-2 h-2 rounded-full ${color}`} />
-        <h3 className="text-sm font-semibold text-gray-700">
+        <h3 className="text-sm font-semibold text-foreground">
           {title}
           <span className="ml-1.5 text-xs font-normal text-gray-400">({todos.length})</span>
         </h3>
@@ -122,7 +122,7 @@ function BarChart({ data, title }: { data: Record<string, number>; title: string
   if (total === 0) {
     return (
       <div>
-        <p className="text-xs font-semibold text-gray-600 mb-2">{title}</p>
+        <p className="text-xs font-semibold text-muted-foreground mb-2">{title}</p>
         <p className="text-xs text-gray-400">데이터 없음</p>
       </div>
     );
@@ -149,7 +149,7 @@ function BarChart({ data, title }: { data: Record<string, number>; title: string
 
   return (
     <div>
-      <p className="text-xs font-semibold text-gray-600 mb-2">{title}</p>
+      <p className="text-xs font-semibold text-muted-foreground mb-2">{title}</p>
       <div className="space-y-1.5">
         {entries.map(([key, count], idx) => {
           const pct = Math.round((count / total) * 100);
@@ -239,7 +239,11 @@ function buildReportText(data: WeeklyReportData): string {
 
 // ---- Main component ----
 
-export function WeeklyReport() {
+interface WeeklyReportProps {
+  projectId?: number;
+}
+
+export function WeeklyReport({ projectId }: WeeklyReportProps) {
   const [currentDate, setCurrentDate] = useState<string>(() => {
     return new Date().toISOString().split("T")[0];
   });
@@ -250,14 +254,14 @@ export function WeeklyReport() {
   const fetchReport = useCallback(async (date: string) => {
     setLoading(true);
     try {
-      const result = await api.getWeeklyReport(date);
+      const result = await api.getWeeklyReport(date, projectId);
       setData(result);
     } catch (err) {
       console.error("Failed to fetch weekly report:", err);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [projectId]);
 
   useEffect(() => {
     fetchReport(currentDate);
@@ -314,7 +318,7 @@ export function WeeklyReport() {
           <Button variant="outline" size="icon" onClick={goToPrevWeek}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-white rounded-lg border text-sm font-medium text-gray-700">
+          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-card rounded-lg border border-border text-sm font-medium text-foreground">
             <Calendar className="h-4 w-4 text-gray-400" />
             {formatDateFull(week_start)} ~ {formatDateFull(week_end)}
           </div>
@@ -343,20 +347,20 @@ export function WeeklyReport() {
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-        <div className="bg-white rounded-xl border p-4">
+        <div className="bg-card rounded-xl border border-border p-4">
           <p className="text-xs text-gray-400 mb-1">총 카드</p>
-          <p className="text-2xl font-bold text-gray-800">{summary.total_count}</p>
+          <p className="text-2xl font-bold text-foreground">{summary.total_count}</p>
         </div>
-        <div className="bg-white rounded-xl border p-4">
+        <div className="bg-card rounded-xl border border-border p-4">
           <p className="text-xs text-gray-400 mb-1">완료율</p>
           <p className="text-2xl font-bold text-emerald-600">{summary.completion_rate}%</p>
           <p className="text-xs text-gray-400">{summary.completed_count}/{summary.total_count}</p>
         </div>
-        <div className="bg-white rounded-xl border p-4">
+        <div className="bg-card rounded-xl border border-border p-4">
           <p className="text-xs text-gray-400 mb-1">신규</p>
           <p className="text-2xl font-bold text-blue-600">{summary.new_count}</p>
         </div>
-        <div className="bg-white rounded-xl border p-4">
+        <div className="bg-card rounded-xl border border-border p-4">
           <p className="text-xs text-gray-400 mb-1">평균 소요</p>
           <p className="text-2xl font-bold text-violet-600">
             {summary.avg_duration_days !== null ? `${summary.avg_duration_days}일` : "-"}
@@ -366,7 +370,7 @@ export function WeeklyReport() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Sections */}
-        <div className="lg:col-span-2 bg-white rounded-xl border p-5">
+        <div className="lg:col-span-2 bg-card rounded-xl border border-border p-5">
           <Section title="이번 주 신규 업무" todos={sections.new_tasks} color="bg-blue-400" />
           <Section title="지난주 이월 업무" todos={sections.carryover_tasks} color="bg-amber-400" />
           <Section title="완료된 업무" todos={sections.completed_tasks} color="bg-emerald-400" showCompleted />
@@ -375,8 +379,8 @@ export function WeeklyReport() {
         </div>
 
         {/* Stats */}
-        <div className="bg-white rounded-xl border p-5 space-y-6">
-          <h3 className="text-sm font-semibold text-gray-700">업무 통계</h3>
+        <div className="bg-card rounded-xl border border-border p-5 space-y-6">
+          <h3 className="text-sm font-semibold text-foreground">업무 통계</h3>
           <BarChart data={stats.category_stats} title="카테고리별" />
           <BarChart data={stats.task_type_stats} title="업무 유형별" />
           <BarChart data={stats.priority_stats} title="우선순위별" />

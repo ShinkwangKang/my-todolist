@@ -17,6 +17,22 @@ class Category(str, enum.Enum):
     PERSONAL = "personal"
 
 
+class Project(Base):
+    __tablename__ = "projects"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), nullable=False)
+    description = Column(Text, nullable=True)
+    color = Column(String(7), nullable=False, default="#3B82F6")
+    icon = Column(String(50), nullable=True)
+    position = Column(Integer, nullable=False, default=0)
+    is_archived = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    todos = relationship("Todo", back_populates="project")
+
+
 todo_tag = Table(
     "todo_tag",
     Base.metadata,
@@ -59,11 +75,14 @@ class Todo(Base):
     description = Column(Text, nullable=True)
     category = Column(SAEnum(Category), nullable=False, default=Category.WORK)
     task_type_id = Column(Integer, ForeignKey("task_types.id", ondelete="SET NULL"), nullable=True)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="SET NULL"), nullable=True)
     priority = Column(SAEnum(Priority), nullable=False, default=Priority.MEDIUM)
     start_date = Column(DateTime, nullable=True)
     due_date = Column(DateTime, nullable=True)
     is_completed = Column(Boolean, default=False)
     completed_at = Column(DateTime, nullable=True)
+    is_archived = Column(Boolean, default=False)
+    archived_at = Column(DateTime, nullable=True)
     column_id = Column(Integer, ForeignKey("columns.id", ondelete="CASCADE"), nullable=False)
     position = Column(Integer, nullable=False, default=0)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
@@ -71,6 +90,7 @@ class Todo(Base):
 
     column = relationship("BoardColumn", back_populates="todos")
     task_type = relationship("TaskType", back_populates="todos")
+    project = relationship("Project", back_populates="todos")
     tags = relationship("Tag", secondary=todo_tag, back_populates="todos")
     daily_progress = relationship("DailyProgress", back_populates="todo", cascade="all, delete-orphan", order_by="DailyProgress.date")
 

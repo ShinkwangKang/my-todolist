@@ -24,6 +24,8 @@ interface KanbanBoardProps {
   onAddTodo: (columnId: number) => void;
   onEditTodo: (todo: Todo) => void;
   onDeleteTodo: (id: number) => void;
+  onArchiveTodo?: (id: number) => void;
+  onBulkArchive?: (columnId: number) => void;
 }
 
 export function KanbanBoard({
@@ -32,6 +34,8 @@ export function KanbanBoard({
   onAddTodo,
   onEditTodo,
   onDeleteTodo,
+  onArchiveTodo,
+  onBulkArchive,
 }: KanbanBoardProps) {
   const [activeTodo, setActiveTodo] = useState<Todo | null>(null);
 
@@ -97,6 +101,8 @@ export function KanbanBoard({
             onAddTodo={onAddTodo}
             onEditTodo={onEditTodo}
             onDeleteTodo={onDeleteTodo}
+            onArchiveTodo={onArchiveTodo}
+            onBulkArchive={onBulkArchive}
           />
         ))}
       </div>
