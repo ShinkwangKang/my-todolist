@@ -10,7 +10,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { GripVertical, MoreHorizontal, Pencil, Trash2, Clock, AlertTriangle } from "lucide-react";
+import { GripVertical, MoreHorizontal, Pencil, Trash2, Clock, AlertTriangle, CalendarCheck } from "lucide-react";
 import type { Todo } from "@/types";
 
 const priorityConfig = {
@@ -104,12 +104,26 @@ export function TodoCard({ todo, onEdit, onDelete }: TodoCardProps) {
             ))}
           </div>
 
+          {todo.start_date && (
+            <div className="flex items-center gap-1 mt-2 text-xs text-blue-500">
+              <CalendarCheck className="h-3 w-3" />
+              <span>
+                시작:{" "}
+                {new Date(todo.start_date).toLocaleDateString("ko-KR", {
+                  month: "short",
+                  day: "numeric",
+                })}
+              </span>
+            </div>
+          )}
+
           {todo.due_date && (
-            <div className={`flex items-center gap-1 mt-2 text-xs ${
+            <div className={`flex items-center gap-1 mt-1 text-xs ${
               isOverdue ? "text-red-600" : isDueSoon ? "text-yellow-600" : "text-gray-500"
             }`}>
               {isOverdue ? <AlertTriangle className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
               <span>
+                마감:{" "}
                 {new Date(todo.due_date).toLocaleDateString("ko-KR", {
                   month: "short",
                   day: "numeric",

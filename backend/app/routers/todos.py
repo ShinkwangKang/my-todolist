@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from datetime import datetime, date
 from typing import Optional
+from pydantic import BaseModel
 
 from .. import crud, schemas
 from ..database import get_db
@@ -67,3 +68,38 @@ def move_todo(todo_id: int, move: schemas.TodoMove, db: Session = Depends(get_db
     if not result:
         raise HTTPException(status_code=404, detail="Todo not found")
     return result
+
+
+# --- DailyProgress ---
+
+class DailyProgressUpsertBody(BaseModel):
+    content: str
+
+
+@router.get("/{todo_id}/daily-progress", response_model=list[schemas.DailyProgressResponse])
+def get_daily_progress(todo_id: int, db: Session = Depends(get_db)):
+    return crud.get_daily_progress(db, todo_id)
+
+
+@router.put("/{todo_id}/daily-progress/{date_str}", response_model=schemas.DailyProgressResponse)
+def upsert_daily_progress(
+    todo_id: int,
+    date_str: str,
+    body: DailyProgressUpsertBody,
+    db: Session = Depends(get_db),
+):
+    try:
+        dt = datetime.strptime(date_str, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(status_code=422, detail="date must be YYYY-MM-DD")
+    return crud.upsert_daily_progress(db, todo_id, dt, body.content)
+
+
+@router.delete("/{todo_id}/daily-progress/{date_str}", status_code=204)
+def delete_daily_progress(todo_id: int, date_str: str, db: Session = Depends(get_db)):
+    try:
+        dt = datetime.strptime(date_str, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(status_code=422, detail="date must be YYYY-MM-DD")
+    if not crud.delete_daily_progress(db, todo_id, dt):
+        raise HTTPException(status_code=404, detail="DailyProgress not found")

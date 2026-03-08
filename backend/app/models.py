@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, ForeignKey, Table, Enum as SAEnum
+from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, ForeignKey, Table, UniqueConstraint, Enum as SAEnum
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 import enum
@@ -60,6 +60,7 @@ class Todo(Base):
     category = Column(SAEnum(Category), nullable=False, default=Category.WORK)
     task_type_id = Column(Integer, ForeignKey("task_types.id", ondelete="SET NULL"), nullable=True)
     priority = Column(SAEnum(Priority), nullable=False, default=Priority.MEDIUM)
+    start_date = Column(DateTime, nullable=True)
     due_date = Column(DateTime, nullable=True)
     is_completed = Column(Boolean, default=False)
     completed_at = Column(DateTime, nullable=True)
@@ -71,6 +72,7 @@ class Todo(Base):
     column = relationship("BoardColumn", back_populates="todos")
     task_type = relationship("TaskType", back_populates="todos")
     tags = relationship("Tag", secondary=todo_tag, back_populates="todos")
+    daily_progress = relationship("DailyProgress", back_populates="todo", cascade="all, delete-orphan", order_by="DailyProgress.date")
 
 
 class Tag(Base):
@@ -81,3 +83,18 @@ class Tag(Base):
     color = Column(String(7), nullable=False, default="#3B82F6")
 
     todos = relationship("Todo", secondary=todo_tag, back_populates="tags")
+
+
+class DailyProgress(Base):
+    __tablename__ = "daily_progress"
+
+    id = Column(Integer, primary_key=True, index=True)
+    todo_id = Column(Integer, ForeignKey("todos.id", ondelete="CASCADE"), nullable=False)
+    date = Column(DateTime, nullable=False)
+    content = Column(Text, nullable=False, default="")
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    __table_args__ = (UniqueConstraint("todo_id", "date", name="uq_daily_progress_todo_date"),)
+
+    todo = relationship("Todo", back_populates="daily_progress")

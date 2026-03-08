@@ -173,6 +173,7 @@ def create_todo(db: Session, todo: schemas.TodoCreate):
         category=todo.category,
         task_type_id=todo.task_type_id,
         priority=todo.priority,
+        start_date=todo.start_date,
         due_date=todo.due_date,
         column_id=todo.column_id,
         position=max_pos + 1,
@@ -267,54 +268,143 @@ def get_weekly_todos(db: Session, date: datetime):
     # Calculate week boundaries (Monday to Sunday)
     weekday = date.weekday()
     week_start = date.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=weekday)
-    week_end = week_start + timedelta(days=7) - timedelta(seconds=1)
+    week_end = week_start + timedelta(days=6, hours=23, minutes=59, seconds=59)
 
     now = datetime.now(timezone.utc)
-    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    today_end = today_start + timedelta(days=1) - timedelta(seconds=1)
+    # Use naive datetime for today to match week_start/week_end (also naive)
+    today_naive = now.replace(tzinfo=None)
+    today_start = today_naive.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    # Day boundaries for Mon(0)..Fri(4), Sat(5)+Sun(6) -> weekend
+    # week_start is Monday
+    day_starts = [week_start + timedelta(days=i) for i in range(7)]  # Mon..Sun
+    day_ends = [day_starts[i] + timedelta(days=1) - timedelta(seconds=1) for i in range(7)]
 
     base_query = db.query(models.Todo).options(
-        joinedload(models.Todo.tags), joinedload(models.Todo.task_type)
+        joinedload(models.Todo.tags),
+        joinedload(models.Todo.task_type),
+        joinedload(models.Todo.daily_progress),
     )
 
-    # Today's todos: due today or in progress
-    in_progress_col = db.query(models.BoardColumn).filter(models.BoardColumn.title == "In Progress").first()
-    today = base_query.filter(
-        ((models.Todo.due_date >= today_start) & (models.Todo.due_date <= today_end))
-        | (models.Todo.column_id == in_progress_col.id if in_progress_col else False)
-    ).order_by(models.Todo.priority, models.Todo.position).all()
+    # Fetch all todos that have a start_date within this week
+    week_todos = base_query.filter(
+        models.Todo.start_date >= week_start,
+        models.Todo.start_date <= week_end,
+    ).order_by(models.Todo.position).all()
 
-    # Added this week
-    added_this_week = base_query.filter(
-        models.Todo.created_at >= week_start,
-        models.Todo.created_at <= week_end,
-    ).order_by(models.Todo.created_at.desc()).all()
+    # day_key_map: index 0=mon,1=tue,2=wed,3=thu,4=fri,5=weekend(sat),6=weekend(sun)
+    day_keys = ["mon", "tue", "wed", "thu", "fri", "weekend", "weekend"]
 
-    # In progress
-    in_progress = []
-    if in_progress_col:
-        in_progress = base_query.filter(
-            models.Todo.column_id == in_progress_col.id
-        ).order_by(models.Todo.position).all()
+    result: dict[str, list] = {
+        "mon": [], "tue": [], "wed": [], "thu": [], "fri": [], "weekend": []
+    }
 
-    # Completed this week
-    completed_this_week = base_query.filter(
-        models.Todo.completed_at >= week_start,
-        models.Todo.completed_at <= week_end,
-    ).order_by(models.Todo.completed_at.desc()).all()
+    for todo in week_todos:
+        start = todo.start_date
+        # Determine which weekday this todo originally belongs to
+        for i in range(7):
+            if day_starts[i] <= start <= day_ends[i]:
+                original_day_idx = i
+                break
+        else:
+            continue
 
-    # Overdue
-    overdue = base_query.filter(
-        models.Todo.due_date < today_start,
-        models.Todo.is_completed == False,
-    ).order_by(models.Todo.due_date).all()
+        is_done = todo.is_completed or (todo.column_id and db.query(models.BoardColumn).filter(
+            models.BoardColumn.id == todo.column_id,
+            models.BoardColumn.title.in_(["Done", "Cancel"])
+        ).first() is not None)
+
+        if is_done:
+            # Completed/cancelled: show from start_date to min(due_date, completed_at)
+            completed_at = todo.completed_at or todo.updated_at or start
+            end_date = completed_at
+            if todo.due_date:
+                due_naive = todo.due_date.replace(hour=23, minute=59, second=59, microsecond=0)
+                end_date = min(end_date, due_naive)
+            end_day_idx = None
+            for i in range(7):
+                if day_starts[i] <= end_date <= day_ends[i]:
+                    end_day_idx = i
+                    break
+            if end_day_idx is None:
+                end_day_idx = 6 if end_date > week_end else original_day_idx
+            for i in range(original_day_idx, end_day_idx + 1):
+                key = day_keys[i]
+                if todo not in result[key]:
+                    result[key].append(todo)
+        else:
+            # Carryover: show from start_date up to min(today, due_date)
+            end_limit = today_start
+            if todo.due_date:
+                due_start = todo.due_date.replace(hour=0, minute=0, second=0, microsecond=0)
+                end_limit = min(end_limit, due_start)
+            for i in range(original_day_idx, 7):
+                col_start = day_starts[i]
+                if col_start > end_limit:
+                    break
+                key = day_keys[i]
+                if todo not in result[key]:
+                    result[key].append(todo)
 
     return {
-        "today": today,
-        "added_this_week": added_this_week,
-        "in_progress": in_progress,
-        "completed_this_week": completed_this_week,
-        "overdue": overdue,
+        "mon": result["mon"],
+        "tue": result["tue"],
+        "wed": result["wed"],
+        "thu": result["thu"],
+        "fri": result["fri"],
+        "weekend": result["weekend"],
         "week_start": week_start,
         "week_end": week_end,
     }
+
+
+# ===== DailyProgress =====
+
+def get_daily_progress(db: Session, todo_id: int):
+    return (
+        db.query(models.DailyProgress)
+        .filter(models.DailyProgress.todo_id == todo_id)
+        .order_by(models.DailyProgress.date)
+        .all()
+    )
+
+
+def upsert_daily_progress(db: Session, todo_id: int, date: datetime, content: str):
+    # Normalize date to day boundary (strip time)
+    date_day = date.replace(hour=0, minute=0, second=0, microsecond=0)
+    existing = (
+        db.query(models.DailyProgress)
+        .filter(
+            models.DailyProgress.todo_id == todo_id,
+            models.DailyProgress.date == date_day,
+        )
+        .first()
+    )
+    if existing:
+        existing.content = content
+        db.commit()
+        db.refresh(existing)
+        return existing
+    else:
+        dp = models.DailyProgress(todo_id=todo_id, date=date_day, content=content)
+        db.add(dp)
+        db.commit()
+        db.refresh(dp)
+        return dp
+
+
+def delete_daily_progress(db: Session, todo_id: int, date: datetime):
+    date_day = date.replace(hour=0, minute=0, second=0, microsecond=0)
+    dp = (
+        db.query(models.DailyProgress)
+        .filter(
+            models.DailyProgress.todo_id == todo_id,
+            models.DailyProgress.date == date_day,
+        )
+        .first()
+    )
+    if not dp:
+        return False
+    db.delete(dp)
+    db.commit()
+    return True

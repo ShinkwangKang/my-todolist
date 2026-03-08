@@ -1,89 +1,196 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import {
+  DndContext,
+  DragOverlay,
+  closestCorners,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  useDroppable,
+  type DragStartEvent,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { ChevronLeft, ChevronRight, Calendar, AlertTriangle, Clock, CheckCircle2, PlusCircle, Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Loader2, MoveRight } from "lucide-react";
+import { TodoCard } from "@/components/Card/TodoCard";
 import type { Todo, WeeklyData } from "@/types";
 import { api } from "@/lib/api";
 
-const priorityConfig = {
-  high: { label: "높음", color: "bg-red-100 text-red-700" },
-  medium: { label: "보통", color: "bg-yellow-100 text-yellow-700" },
-  low: { label: "낮음", color: "bg-green-100 text-green-700" },
+// Day column keys and labels
+const DAY_KEYS = ["mon", "tue", "wed", "thu", "fri", "weekend"] as const;
+type DayKey = (typeof DAY_KEYS)[number];
+
+const DAY_LABELS: Record<DayKey, string> = {
+  mon: "월",
+  tue: "화",
+  wed: "수",
+  thu: "목",
+  fri: "금",
+  weekend: "주말",
 };
 
-function WeeklyTodoItem({ todo, onEdit }: { todo: Todo; onEdit: (todo: Todo) => void }) {
-  const isOverdue = todo.due_date && !todo.is_completed && new Date(todo.due_date) < new Date();
+// Returns the Date object for each day column given week_start (Monday)
+function getDayDates(weekStart: Date): Record<DayKey, Date> {
+  return {
+    mon: new Date(weekStart.getTime() + 0 * 86400000),
+    tue: new Date(weekStart.getTime() + 1 * 86400000),
+    wed: new Date(weekStart.getTime() + 2 * 86400000),
+    thu: new Date(weekStart.getTime() + 3 * 86400000),
+    fri: new Date(weekStart.getTime() + 4 * 86400000),
+    weekend: new Date(weekStart.getTime() + 5 * 86400000), // Saturday
+  };
+}
 
+function formatDayHeader(dayKey: DayKey, dayDate: Date): string {
+  const label = DAY_LABELS[dayKey];
+  const month = dayDate.getMonth() + 1;
+  const day = dayDate.getDate();
+  return `${label} ${month}/${day}`;
+}
+
+function isToday(date: Date): boolean {
+  const now = new Date();
   return (
-    <div
-      className="flex items-center gap-3 p-3 bg-white rounded-lg border border-gray-200 hover:shadow-sm cursor-pointer transition-shadow"
-      onClick={() => onEdit(todo)}
-    >
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-1">
-          {todo.task_type && (
-            <span
-              className="text-xs px-1.5 py-0.5 rounded"
-              style={{ backgroundColor: todo.task_type.color + "20", color: todo.task_type.color }}
-            >
-              {todo.task_type.name}
-            </span>
-          )}
-          <Badge variant="outline" className={`text-xs ${priorityConfig[todo.priority].color}`}>
-            {priorityConfig[todo.priority].label}
-          </Badge>
-        </div>
-        <h4 className={`text-sm font-medium ${todo.is_completed ? "line-through text-gray-400" : "text-gray-900"}`}>
-          {todo.title}
-        </h4>
-        {todo.due_date && (
-          <p className={`text-xs mt-1 ${isOverdue ? "text-red-500" : "text-gray-500"}`}>
-            {new Date(todo.due_date).toLocaleDateString("ko-KR", {
-              month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
-            })}
-          </p>
-        )}
-      </div>
-      <div className="flex gap-1">
-        {todo.tags.map((tag) => (
-          <span
-            key={tag.id}
-            className="w-2 h-2 rounded-full"
-            style={{ backgroundColor: tag.color }}
-            title={tag.name}
-          />
-        ))}
-      </div>
-    </div>
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate()
   );
 }
 
-interface WeeklySectionProps {
-  title: string;
-  icon: React.ReactNode;
-  todos: Todo[];
-  emptyMessage: string;
-  onEdit: (todo: Todo) => void;
+function isThisWeekend(weekStart: Date): boolean {
+  const now = new Date();
+  const sat = new Date(weekStart.getTime() + 5 * 86400000);
+  const sun = new Date(weekStart.getTime() + 6 * 86400000);
+  return (
+    (now.getFullYear() === sat.getFullYear() &&
+      now.getMonth() === sat.getMonth() &&
+      now.getDate() === sat.getDate()) ||
+    (now.getFullYear() === sun.getFullYear() &&
+      now.getMonth() === sun.getMonth() &&
+      now.getDate() === sun.getDate())
+  );
 }
 
-function WeeklySection({ title, icon, todos, emptyMessage, onEdit }: WeeklySectionProps) {
+// A todo is a carryover if it appears in this column but its start_date day != this column's day
+function isCarryover(todo: Todo, dayKey: DayKey, weekStart: Date): boolean {
+  if (!todo.start_date) return false;
+  const start = new Date(todo.start_date);
+  const dayDates = getDayDates(weekStart);
+  const colDate = dayDates[dayKey];
+
+  if (dayKey === "weekend") {
+    const sat = colDate;
+    const sun = new Date(weekStart.getTime() + 6 * 86400000);
+    const startDay = start.toDateString();
+    return startDay !== sat.toDateString() && startDay !== sun.toDateString();
+  }
+  return start.toDateString() !== colDate.toDateString();
+}
+
+// Build start_date ISO string for the given day column (noon time)
+function buildStartDate(dayKey: DayKey, weekStart: Date): string {
+  const dayDates = getDayDates(weekStart);
+  const date = dayDates[dayKey];
+  // Use noon (12:00) as default time
+  const d = new Date(date);
+  d.setHours(12, 0, 0, 0);
+  return d.toISOString();
+}
+
+interface WeekDayColumnProps {
+  dayKey: DayKey;
+  dayDate: Date;
+  weekStart: Date;
+  todos: Todo[];
+  isCurrentDay: boolean;
+  onEditTodo: (todo: Todo) => void;
+  onDeleteTodo: (id: number) => void;
+  onAddTodo: (dayKey: DayKey) => void;
+}
+
+function WeekDayColumn({
+  dayKey,
+  dayDate,
+  weekStart,
+  todos,
+  isCurrentDay,
+  onEditTodo,
+  onDeleteTodo,
+  onAddTodo,
+}: WeekDayColumnProps) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: `day-${dayKey}`,
+    data: { type: "day", dayKey },
+  });
+
   return (
-    <div className="bg-gray-50 rounded-lg border p-4">
-      <div className="flex items-center gap-2 mb-3">
-        {icon}
-        <h3 className="font-semibold text-gray-700">{title}</h3>
+    <div
+      className={`flex flex-col w-72 min-w-[288px] rounded-lg border bg-gray-50 ${
+        isCurrentDay
+          ? "border-t-4 border-t-blue-500 ring-1 ring-blue-200"
+          : "border-t-4 border-t-gray-300"
+      } ${isOver ? "ring-2 ring-blue-300 bg-blue-50/30" : ""}`}
+    >
+      {/* Column header */}
+      <div className="flex items-center gap-2 p-3 pb-2">
+        <h2
+          className={`font-semibold ${
+            isCurrentDay ? "text-blue-600" : "text-gray-700"
+          }`}
+        >
+          {formatDayHeader(dayKey, dayDate)}
+        </h2>
         <span className="text-xs text-gray-400 bg-gray-200 px-1.5 py-0.5 rounded-full">
           {todos.length}
         </span>
-      </div>
-      <div className="space-y-2">
-        {todos.length === 0 ? (
-          <p className="text-sm text-gray-400 text-center py-4">{emptyMessage}</p>
-        ) : (
-          todos.map((todo) => <WeeklyTodoItem key={todo.id} todo={todo} onEdit={onEdit} />)
+        {isCurrentDay && (
+          <span className="text-xs bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full ml-auto">
+            오늘
+          </span>
         )}
+      </div>
+
+      {/* Cards area */}
+      <div
+        ref={setNodeRef}
+        className="flex-1 overflow-y-auto p-2 pt-0 space-y-2 min-h-[100px]"
+      >
+        <SortableContext
+          items={todos.map((t) => `todo-${t.id}-${dayKey}`)}
+          strategy={verticalListSortingStrategy}
+        >
+          {todos.map((todo) => {
+            const carryover = isCarryover(todo, dayKey, weekStart);
+            return (
+              <div
+                key={`${todo.id}-${dayKey}`}
+                className={`relative ${carryover ? "opacity-60" : ""}`}
+              >
+                {carryover && (
+                  <div className="absolute -top-1 -right-1 z-10 bg-orange-400 rounded-full p-0.5">
+                    <MoveRight className="h-2.5 w-2.5 text-white" />
+                  </div>
+                )}
+                <TodoCard
+                  todo={todo}
+                  onEdit={onEditTodo}
+                  onDelete={onDeleteTodo}
+                />
+              </div>
+            );
+          })}
+        </SortableContext>
+
+        {/* Add card button */}
+        <button
+          onClick={() => onAddTodo(dayKey)}
+          className="w-full flex items-center justify-center p-3 rounded-lg border-2 border-dashed border-gray-300 text-gray-400 hover:border-gray-400 hover:text-gray-500 hover:bg-gray-100 transition-colors"
+        >
+          <Plus className="h-5 w-5" />
+        </button>
       </div>
     </div>
   );
@@ -91,14 +198,23 @@ function WeeklySection({ title, icon, todos, emptyMessage, onEdit }: WeeklySecti
 
 interface WeeklyBoardProps {
   onEditTodo: (todo: Todo) => void;
+  onAddTodo?: (defaultDueDate?: string) => void;
+  onRefresh?: () => void;
+  columns?: import("@/types").Column[];
 }
 
-export function WeeklyBoard({ onEditTodo }: WeeklyBoardProps) {
+export function WeeklyBoard({ onEditTodo, onAddTodo, onRefresh, columns }: WeeklyBoardProps) {
   const [weeklyData, setWeeklyData] = useState<WeeklyData | null>(null);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [loading, setLoading] = useState(true);
+  const [activeTodo, setActiveTodo] = useState<Todo | null>(null);
+  const [activeDayKey, setActiveDayKey] = useState<DayKey | null>(null);
 
-  const fetchWeekly = async () => {
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+  );
+
+  const fetchWeekly = useCallback(async () => {
     setLoading(true);
     try {
       const dateStr = currentDate.toISOString().split("T")[0];
@@ -109,11 +225,11 @@ export function WeeklyBoard({ onEditTodo }: WeeklyBoardProps) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentDate]);
 
   useEffect(() => {
     fetchWeekly();
-  }, [currentDate]);
+  }, [fetchWeekly]);
 
   const navigateWeek = (direction: number) => {
     const newDate = new Date(currentDate);
@@ -130,6 +246,77 @@ export function WeeklyBoard({ onEditTodo }: WeeklyBoardProps) {
     return `${start.toLocaleDateString("ko-KR", { month: "long", day: "numeric" })} - ${end.toLocaleDateString("ko-KR", { month: "long", day: "numeric" })}`;
   };
 
+  const handleAddTodoForDay = (dayKey: DayKey) => {
+    if (!weeklyData) return;
+    const weekStart = new Date(weeklyData.week_start);
+    const startDate = buildStartDate(dayKey, weekStart);
+    if (onAddTodo) {
+      onAddTodo(startDate);
+    }
+  };
+
+  const handleDeleteTodo = async (id: number) => {
+    try {
+      await api.deleteTodo(id);
+      fetchWeekly();
+      if (onRefresh) onRefresh();
+    } catch (err) {
+      console.error("Failed to delete todo:", err);
+    }
+  };
+
+  const handleDragStart = (event: DragStartEvent) => {
+    const { active } = event;
+    if (active.data.current?.type === "todo") {
+      setActiveTodo(active.data.current.todo);
+      setActiveDayKey(active.data.current.dayKey ?? null);
+    }
+  };
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveTodo(null);
+    setActiveDayKey(null);
+
+    if (!over || !weeklyData) return;
+
+    const overId = String(over.id);
+    let targetDayKey: DayKey | null = null;
+
+    if (overId.startsWith("day-")) {
+      targetDayKey = overId.replace("day-", "") as DayKey;
+    } else if (overId.startsWith("todo-")) {
+      // Find which day column the target card is in
+      for (const key of DAY_KEYS) {
+        const todos = weeklyData[key];
+        const found = todos.find((t) => `todo-${t.id}-${key}` === overId);
+        if (found) {
+          targetDayKey = key;
+          break;
+        }
+      }
+    }
+
+    if (!targetDayKey) return;
+
+    // Extract todo id from active id (format: "todo-{id}-{dayKey}")
+    const activeIdStr = String(active.id);
+    const parts = activeIdStr.split("-");
+    const todoId = Number(parts[1]);
+    if (!todoId) return;
+
+    const weekStart = new Date(weeklyData.week_start);
+    const newStartDate = buildStartDate(targetDayKey, weekStart);
+
+    try {
+      await api.updateTodo(todoId, { start_date: newStartDate });
+      fetchWeekly();
+      if (onRefresh) onRefresh();
+    } catch (err) {
+      console.error("Failed to update due_date:", err);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -138,9 +325,13 @@ export function WeeklyBoard({ onEditTodo }: WeeklyBoardProps) {
     );
   }
 
+  const weekStart = weeklyData ? new Date(weeklyData.week_start) : new Date();
+  const dayDates = getDayDates(weekStart);
+
   return (
     <div className="px-4 pb-4">
-      <div className="flex items-center justify-between mb-6">
+      {/* Navigation */}
+      <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <Button variant="outline" size="icon" onClick={() => navigateWeek(-1)}>
             <ChevronLeft className="h-4 w-4" />
@@ -157,43 +348,46 @@ export function WeeklyBoard({ onEditTodo }: WeeklyBoardProps) {
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <WeeklySection
-          title="오늘 할 일"
-          icon={<Calendar className="h-5 w-5 text-blue-500" />}
-          todos={weeklyData?.today || []}
-          emptyMessage="오늘 할 일이 없습니다"
-          onEdit={onEditTodo}
-        />
-        <WeeklySection
-          title="지연됨"
-          icon={<AlertTriangle className="h-5 w-5 text-red-500" />}
-          todos={weeklyData?.overdue || []}
-          emptyMessage="지연된 일이 없습니다"
-          onEdit={onEditTodo}
-        />
-        <WeeklySection
-          title="진행 중"
-          icon={<Clock className="h-5 w-5 text-yellow-500" />}
-          todos={weeklyData?.in_progress || []}
-          emptyMessage="진행 중인 일이 없습니다"
-          onEdit={onEditTodo}
-        />
-        <WeeklySection
-          title="이번 주 완료"
-          icon={<CheckCircle2 className="h-5 w-5 text-green-500" />}
-          todos={weeklyData?.completed_this_week || []}
-          emptyMessage="이번 주 완료한 일이 없습니다"
-          onEdit={onEditTodo}
-        />
-        <WeeklySection
-          title="이번 주 추가된 일"
-          icon={<PlusCircle className="h-5 w-5 text-purple-500" />}
-          todos={weeklyData?.added_this_week || []}
-          emptyMessage="이번 주 추가된 일이 없습니다"
-          onEdit={onEditTodo}
-        />
-      </div>
+      {/* Day columns */}
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCorners}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+      >
+        <div className="flex gap-4 overflow-x-auto pb-4">
+          {DAY_KEYS.map((dayKey) => {
+            const dayDate = dayDates[dayKey];
+            const todos = weeklyData?.[dayKey] ?? [];
+            const currentDay =
+              dayKey === "weekend"
+                ? isThisWeekend(weekStart)
+                : isToday(dayDate);
+
+            return (
+              <WeekDayColumn
+                key={dayKey}
+                dayKey={dayKey}
+                dayDate={dayDate}
+                weekStart={weekStart}
+                todos={todos}
+                isCurrentDay={currentDay}
+                onEditTodo={onEditTodo}
+                onDeleteTodo={handleDeleteTodo}
+                onAddTodo={handleAddTodoForDay}
+              />
+            );
+          })}
+        </div>
+
+        <DragOverlay>
+          {activeTodo ? (
+            <div className="rotate-2 opacity-90">
+              <TodoCard todo={activeTodo} onEdit={() => {}} onDelete={() => {}} />
+            </div>
+          ) : null}
+        </DragOverlay>
+      </DndContext>
     </div>
   );
 }

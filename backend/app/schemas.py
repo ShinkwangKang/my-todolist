@@ -64,6 +64,23 @@ class TagResponse(TagBase):
     model_config = {"from_attributes": True}
 
 
+# --- DailyProgress ---
+class DailyProgressBase(BaseModel):
+    date: datetime
+    content: str
+
+class DailyProgressCreate(DailyProgressBase):
+    pass
+
+class DailyProgressResponse(DailyProgressBase):
+    id: int
+    todo_id: int
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 # --- Todo ---
 class TodoBase(BaseModel):
     title: str
@@ -71,6 +88,7 @@ class TodoBase(BaseModel):
     category: Category = Category.WORK
     task_type_id: Optional[int] = None
     priority: Priority = Priority.MEDIUM
+    start_date: Optional[datetime] = None
     due_date: Optional[datetime] = None
 
 class TodoCreate(TodoBase):
@@ -83,6 +101,7 @@ class TodoUpdate(BaseModel):
     category: Optional[Category] = None
     task_type_id: Optional[int] = None
     priority: Optional[Priority] = None
+    start_date: Optional[datetime] = None
     due_date: Optional[datetime] = None
     is_completed: Optional[bool] = None
     tag_ids: Optional[list[int]] = None
@@ -99,6 +118,7 @@ class TodoResponse(TodoBase):
     position: int
     tags: list[TagResponse] = []
     task_type: Optional[TaskTypeResponse] = None
+    daily_progress: list[DailyProgressResponse] = []
     created_at: datetime
     updated_at: datetime
 
@@ -112,10 +132,11 @@ class ColumnWithTodos(ColumnResponse):
 
 # --- Weekly ---
 class WeeklyResponse(BaseModel):
-    today: list[TodoResponse]
-    added_this_week: list[TodoResponse]
-    in_progress: list[TodoResponse]
-    completed_this_week: list[TodoResponse]
-    overdue: list[TodoResponse]
+    mon: list[TodoResponse]
+    tue: list[TodoResponse]
+    wed: list[TodoResponse]
+    thu: list[TodoResponse]
+    fri: list[TodoResponse]
+    weekend: list[TodoResponse]
     week_start: datetime
     week_end: datetime

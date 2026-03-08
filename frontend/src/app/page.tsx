@@ -21,6 +21,7 @@ export default function Home() {
   const [formOpen, setFormOpen] = useState(false);
   const [editingTodo, setEditingTodo] = useState<Todo | null>(null);
   const [defaultColumnId, setDefaultColumnId] = useState<number | undefined>();
+  const [defaultStartDate, setDefaultStartDate] = useState<string | undefined>();
 
   const fetchData = useCallback(async () => {
     try {
@@ -46,12 +47,14 @@ export default function Home() {
   const handleAddTodo = (columnId: number) => {
     setEditingTodo(null);
     setDefaultColumnId(columnId);
+    setDefaultStartDate(undefined);
     setFormOpen(true);
   };
 
   const handleEditTodo = (todo: Todo) => {
     setEditingTodo(todo);
     setDefaultColumnId(undefined);
+    setDefaultStartDate(undefined);
     setFormOpen(true);
   };
 
@@ -70,6 +73,7 @@ export default function Home() {
     category: Category;
     task_type_id?: number;
     priority: Priority;
+    start_date?: string;
     due_date?: string;
     column_id: number;
     tag_ids: number[];
@@ -120,6 +124,7 @@ export default function Home() {
               onClick={() => {
                 setEditingTodo(null);
                 setDefaultColumnId(columns[0]?.id);
+                setDefaultStartDate(undefined);
                 setFormOpen(true);
               }}
             >
@@ -141,7 +146,17 @@ export default function Home() {
             onDeleteTodo={handleDeleteTodo}
           />
         ) : (
-          <WeeklyBoard onEditTodo={handleEditTodo} />
+          <WeeklyBoard
+            onEditTodo={handleEditTodo}
+            onAddTodo={(defaultStartDate?: string) => {
+              setEditingTodo(null);
+              setDefaultColumnId(columns[0]?.id);
+              setDefaultStartDate(defaultStartDate);
+              setFormOpen(true);
+            }}
+            onRefresh={fetchData}
+            columns={columns}
+          />
         )}
       </main>
 
@@ -155,6 +170,7 @@ export default function Home() {
         tags={tags}
         taskTypes={taskTypes}
         defaultColumnId={defaultColumnId}
+        defaultStartDate={defaultStartDate}
       />
     </div>
   );

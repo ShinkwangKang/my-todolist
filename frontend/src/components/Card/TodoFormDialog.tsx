@@ -30,6 +30,7 @@ interface TodoFormDialogProps {
     category: Category;
     task_type_id?: number;
     priority: Priority;
+    start_date?: string;
     due_date?: string;
     column_id: number;
     tag_ids: number[];
@@ -39,6 +40,7 @@ interface TodoFormDialogProps {
   tags: Tag[];
   taskTypes: TaskType[];
   defaultColumnId?: number;
+  defaultStartDate?: string;
 }
 
 export function TodoFormDialog({
@@ -50,12 +52,14 @@ export function TodoFormDialog({
   tags,
   taskTypes,
   defaultColumnId,
+  defaultStartDate,
 }: TodoFormDialogProps) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState<Category>("work");
   const [taskTypeId, setTaskTypeId] = useState<string>("");
   const [priority, setPriority] = useState<Priority>("medium");
+  const [startDate, setStartDate] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [columnId, setColumnId] = useState<string>("");
   const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
@@ -67,6 +71,7 @@ export function TodoFormDialog({
       setCategory(todo.category);
       setTaskTypeId(todo.task_type_id?.toString() || "");
       setPriority(todo.priority);
+      setStartDate(todo.start_date ? todo.start_date.slice(0, 16) : "");
       setDueDate(todo.due_date ? todo.due_date.slice(0, 16) : "");
       setColumnId(todo.column_id.toString());
       setSelectedTagIds(todo.tags.map((t) => t.id));
@@ -76,11 +81,16 @@ export function TodoFormDialog({
       setCategory("work");
       setTaskTypeId("");
       setPriority("medium");
+      setStartDate(
+        defaultStartDate
+          ? new Date(defaultStartDate).toISOString().slice(0, 16)
+          : ""
+      );
       setDueDate("");
       setColumnId(defaultColumnId?.toString() || columns[0]?.id.toString() || "");
       setSelectedTagIds([]);
     }
-  }, [todo, open, defaultColumnId, columns]);
+  }, [todo, open, defaultColumnId, defaultStartDate, columns]);
 
   const toggleTag = (tagId: number) => {
     setSelectedTagIds((prev) =>
@@ -97,6 +107,7 @@ export function TodoFormDialog({
       category,
       task_type_id: taskTypeId ? Number(taskTypeId) : undefined,
       priority,
+      start_date: startDate || undefined,
       due_date: dueDate || undefined,
       column_id: Number(columnId),
       tag_ids: selectedTagIds,
@@ -194,14 +205,25 @@ export function TodoFormDialog({
             </div>
           </div>
 
-          <div>
-            <Label htmlFor="due_date">마감일</Label>
-            <Input
-              id="due_date"
-              type="datetime-local"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="start_date">시작일</Label>
+              <Input
+                id="start_date"
+                type="datetime-local"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="due_date">마감일</Label>
+              <Input
+                id="due_date"
+                type="datetime-local"
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
+              />
+            </div>
           </div>
 
           <div>

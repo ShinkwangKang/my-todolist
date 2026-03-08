@@ -48,6 +48,7 @@ export const api = {
     category?: string;
     task_type_id?: number;
     priority?: string;
+    start_date?: string;
     due_date?: string;
     column_id: number;
     tag_ids?: number[];
@@ -102,4 +103,15 @@ export const api = {
     }),
   deleteTaskType: (id: number) =>
     request<void>(`/api/task-types/${id}`, { method: "DELETE" }),
+
+  // Daily Progress
+  getDailyProgress: (todoId: number) =>
+    request<import("@/types").DailyProgress[]>(`/api/todos/${todoId}/daily-progress`),
+  upsertDailyProgress: (todoId: number, date: string, content: string) =>
+    request<import("@/types").DailyProgress>(`/api/todos/${todoId}/daily-progress/${date}`, {
+      method: "PUT",
+      body: JSON.stringify({ content }),
+    }),
+  deleteDailyProgress: (todoId: number, date: string) =>
+    request<void>(`/api/todos/${todoId}/daily-progress/${date}`, { method: "DELETE" }),
 };
