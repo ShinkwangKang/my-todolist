@@ -69,9 +69,51 @@
   - 평균 소요 기간 (시작일 → 완료일)
 - 리포트 내용 텍스트 복사 기능 (클립보드 복사 버튼)
 
-### 2. 할 일(카드) CRUD
+### 2. 프로젝트 관리
+- 프로젝트 단위로 카드(할 일)를 그룹핑
+- 프로젝트별 이름, 설명, 색상, 아이콘 설정
+- 프로젝트 순서 변경 (드래그 또는 reorder)
+- 접이식 사이드바에서 프로젝트 목록 표시 및 선택
+  - 프로젝트 선택 시 해당 프로젝트의 카드만 필터링 (칸반/주간/리포트 모두 적용)
+  - 사이드바 접기/펼치기 토글
+- 프로젝트 아카이브 가능
+
+### 3. 다크 모드
+- 3단 토글: Light / Dark / System
+- 시스템 테마 감지 (prefers-color-scheme)
+- SSR 깜빡임(FOUC) 방지
+- 모든 UI 컴포넌트에 다크 모드 스타일 적용
+
+### 4. 마감 임박/지연 시각화
+- 카드 좌측에 컬러바로 상태 표시
+  - 마감 임박 (예: 1~2일 이내): 경고 색상
+  - 마감 지연 (due_date 초과): 위험 색상
+- 지연일수 표시
+- 컬럼 헤더에 마감 관련 카운트 표시
+
+### 5. 검색 & 필터 패널
+- 텍스트 검색 (제목/설명)
+- 우선순위별 필터링
+- 카테고리별(업무/개인) 필터링
+- 업무 유형별 필터링
+- 태그별 필터링
+- 필터 조합 가능 (AND 조건)
+
+### 6. 아카이브
+- 개별 카드 아카이브/복원
+- 컬럼 단위 일괄 아카이브 (해당 컬럼의 모든 카드)
+- 아카이브 뷰에서 아카이브된 카드 목록 확인
+- 아카이브된 카드 복원 (원래 컬럼으로 돌아감)
+- 아카이브된 카드는 칸반/주간 보드에서 숨김
+
+### 7. 완료일 UI 노출
+- 완료된 카드에 완료일(completed_at) 표시
+- 주간 보드 캐리오버에서 completed_at 기준으로 표시 범위 결정
+
+### 8. 할 일(카드) CRUD
 - 제목, 설명 입력
 - 카테고리 선택: 업무(work) / 개인(personal)
+- 프로젝트 선택 (선택사항)
 - 업무 유형(Task Type) 선택: 사용자 정의 가능
   - 기본 유형: 개발, 문서, JIRA, 회의, 기타
   - 설정에서 유형 추가/수정/삭제 가능
@@ -81,21 +123,21 @@
 - 카테고리별, 업무 유형별 시각적 구분 (아이콘 또는 색상 배지)
 - 카테고리, 업무 유형 기반 필터링
 
-### 3. 카테고리 / 태그
+### 9. 카테고리 / 태그
 - 카드에 여러 태그 부여
 - 태그별 색상 지정
 - 태그 기반 필터링
 
-### 4. 우선순위
+### 10. 우선순위
 - 높음 / 보통 / 낮음 (3단계)
 - 우선순위별 시각적 표시 (색상/아이콘)
 - 우선순위 기반 정렬/필터링
 
-### 5. 시작일 / 마감일
+### 11. 시작일 / 마감일
 - **시작일(start_date)**: 작업 시작 예정 날짜
   - 주간 보드에서 카드 배치 기준
 - **마감일(due_date)**: 작업 완료 기한
-  - 마감 임박/초과 시각적 경고
+  - 마감 임박/초과 시각적 경고 (Feature 4 연계)
 - 시작일/마감일 기반 정렬/필터링
 
 ## 비기능 요구사항
@@ -120,10 +162,14 @@ My-TodoList/
 │   │   ├── components/    # UI 컴포넌트
 │   │   │   ├── Board/     # 칸반 보드
 │   │   │   ├── Weekly/    # 주간 보드
+│   │   │   ├── Report/    # 주간 리포트
 │   │   │   ├── Card/      # 할 일 카드
+│   │   │   ├── Filter/    # 검색 & 필터 패널
+│   │   │   ├── Archive/   # 아카이브 뷰
+│   │   │   ├── Sidebar/   # 프로젝트 사이드바
 │   │   │   └── common/    # 공통 컴포넌트
 │   │   ├── hooks/         # 커스텀 훅
-│   │   ├── lib/           # API 클라이언트, 유틸
+│   │   ├── lib/           # API 클라이언트, 유틸 (api.ts, filter.ts, theme.ts)
 │   │   └── types/         # TypeScript 타입
 │   └── package.json
 ├── backend/           # FastAPI 앱
@@ -133,7 +179,7 @@ My-TodoList/
 │   │   ├── schemas.py     # Pydantic 스키마
 │   │   ├── crud.py        # DB 작업
 │   │   ├── database.py    # DB 연결 설정
-│   │   └── routers/       # API 라우터
+│   │   └── routers/       # API 라우터 (columns, todos, tags, task-types, projects)
 │   └── requirements.txt
 ├── data/              # SQLite DB 파일 저장
 ├── start.sh           # Linux/Mac 실행 스크립트
@@ -143,21 +189,32 @@ My-TodoList/
 
 ## API 엔드포인트
 
+### 프로젝트
+- `GET /api/projects` - 전체 프로젝트 목록
+- `POST /api/projects` - 프로젝트 생성
+- `PUT /api/projects/{id}` - 프로젝트 수정
+- `DELETE /api/projects/{id}` - 프로젝트 삭제
+- `PUT /api/projects/reorder` - 프로젝트 순서 변경
+
 ### 컬럼
-- `GET /api/columns` - 전체 컬럼 목록
+- `GET /api/columns` - 전체 컬럼 목록 (project_id 쿼리 파라미터 지원)
 - `POST /api/columns` - 컬럼 생성
 - `PUT /api/columns/{id}` - 컬럼 수정
 - `DELETE /api/columns/{id}` - 컬럼 삭제
 - `PUT /api/columns/reorder` - 컬럼 순서 변경
 
 ### 할 일 (카드)
-- `GET /api/todos` - 전체 할 일 목록 (필터링/정렬 쿼리 파라미터)
-- `GET /api/todos/weekly?date=YYYY-MM-DD` - 주간 보드 데이터 (요일별 그룹핑)
-- `GET /api/todos/weekly-report?date=YYYY-MM-DD` - 주간 리포트 데이터 (섹션별 + 통계)
+- `GET /api/todos` - 전체 할 일 목록 (필터링: column_id, priority, category, task_type_id, tag_id, is_completed, project_id)
+- `GET /api/todos/weekly?date=YYYY-MM-DD&project_id=N` - 주간 보드 데이터 (요일별 그룹핑)
+- `GET /api/todos/weekly-report?date=YYYY-MM-DD&project_id=N` - 주간 리포트 데이터 (섹션별 + 통계)
+- `GET /api/todos/archived?project_id=N` - 아카이브된 할 일 목록
+- `PUT /api/todos/bulk-archive?column_id=N` - 컬럼 단위 일괄 아카이브
 - `POST /api/todos` - 할 일 생성
 - `PUT /api/todos/{id}` - 할 일 수정
 - `DELETE /api/todos/{id}` - 할 일 삭제
 - `PUT /api/todos/{id}/move` - 컬럼 이동 / 순서 변경
+- `PUT /api/todos/{id}/archive` - 개별 아카이브
+- `PUT /api/todos/{id}/unarchive` - 아카이브 복원
 
 ### 일별 진행 기록
 - `GET /api/todos/{id}/daily-progress` - 해당 할일의 전체 일별 기록
@@ -178,11 +235,14 @@ My-TodoList/
 
 ## DB 모델
 
+### Project (프로젝트)
+- id, name, description, color, icon, position, is_archived, created_at, updated_at
+
 ### Column (컬럼)
 - id, title, position, created_at, updated_at
 
 ### Todo (할 일)
-- id, title, description, category (work/personal), task_type_id (FK -> TaskType), priority (high/medium/low), start_date, due_date, is_completed, completed_at, column_id, position, created_at, updated_at
+- id, title, description, category (work/personal), task_type_id (FK -> TaskType), project_id (FK -> Project, nullable), priority (high/medium/low), start_date, due_date, is_completed, completed_at, is_archived, archived_at, column_id, position, created_at, updated_at
 
 ### Tag (태그)
 - id, name, color
